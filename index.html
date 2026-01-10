@@ -347,8 +347,8 @@
     function parseScheduleInput(input) {
       console.log("=== parseScheduleInput ===", input);
 
-      const timeOutsideParenMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
-      console.log("時間カッコ外パターンマッチ:", timeOutsideParenMatch);
+      const debugMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
+      console.log("時間カッコ外パターンマッチ:", debugMatch);
 
       let title = input;
 
