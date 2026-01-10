@@ -347,6 +347,9 @@
     function parseScheduleInput(input) {
       console.log("=== parseScheduleInput ===", input);
 
+      const timeOutsideParenMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
+      console.log("時間カッコ外パターンマッチ:", timeOutsideParenMatch);
+
       let title = input;
 
       // カッコ付きの予定を検出（例：12/14 (0800 ドリフ)、1/17 (1000 れいな一時保育)）
