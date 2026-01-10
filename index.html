@@ -377,9 +377,9 @@
         .replace(/\s+/g, ' ')
         .trim();
 
-      // 末尾に「他人の予定」「他人」「家族の予定」「家族」があればisOther: true
+      // 末尾に「他人の予定」「家族の予定」があればisOther: true
       let isOther = false;
-      const otherMatch = title.match(/[\s　]*(他人の?予定|他人|家族の?予定|家族)$/);
+      const otherMatch = title.match(/[\s　]*(他人の予定|家族の予定)$/);
       if (otherMatch) {
         isOther = true;
         title = title.replace(otherMatch[0], '').trim();
@@ -1202,7 +1202,13 @@
       inputField.value = '';
 
       // 予定確認パターンをチェック
-      if (/予定|一覧|スケジュール|今どうなってる/.test(input) && !/を|に変更|削除|キャンセル|なくなった|間違い/.test(input)) {
+      // 条件：「予定」等を含む AND 変更・削除でない AND 「他人の予定」等でない AND 日付パターンを含まない
+      const datePatternCheck = /\d{1,2}[\/月]\d{1,2}|今日|明日|明後日|あさって|来週|今週|再来週|今度|次の[日月火水木金土]|今月|来月/;
+      const isScheduleCheck = /予定|一覧|スケジュール|今どうなってる/.test(input) &&
+        !/を|に変更|削除|キャンセル|なくなった|間違い/.test(input) &&
+        !/他人の予定|家族の予定/.test(input) &&
+        !datePatternCheck.test(input);
+      if (isScheduleCheck) {
         showScheduleList();
         return;
       }
