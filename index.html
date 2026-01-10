@@ -387,7 +387,7 @@
 
       return {
         date: `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`,
-        time: timeResult ? formatTime(timeResult.time) : null,
+        time: timeResult ? formatTime(timeResult.time) : '未定',
         title: title || '予定',
         fullDate: dateResult.date.toISOString(),
         isOther: isOther
@@ -860,17 +860,22 @@
       );
     }
 
+    // 有効な時間かどうかをチェック（4桁の数字）
+    function isValidTime(time) {
+      return time && time !== '未定' && /^\d{4}$/.test(time);
+    }
+
     // ダブルブッキングチェック（2時間以内の予定を検出、excludeで指定した予定は除外）
     function findNearbySchedule(schedule, exclude = null) {
-      if (!schedule.time || schedule.isOther) return null;
+      if (!isValidTime(schedule.time) || schedule.isOther) return null;
 
       const newTime = parseInt(schedule.time.slice(0, 2)) * 60 + parseInt(schedule.time.slice(2));
 
       for (const s of schedules) {
         // 除外指定された予定はスキップ
         if (s === exclude) continue;
-        // 同じ日、時間あり、自分の予定（isOther: false）のみ
-        if (s.date === schedule.date && s.time && !s.isOther) {
+        // 同じ日、有効な時間あり、自分の予定（isOther: false）のみ
+        if (s.date === schedule.date && isValidTime(s.time) && !s.isOther) {
           const existingTime = parseInt(s.time.slice(0, 2)) * 60 + parseInt(s.time.slice(2));
           const diff = Math.abs(newTime - existingTime);
           if (diff > 0 && diff <= 120) { // 2時間以内（同一時刻は除く）
@@ -883,7 +888,7 @@
 
     // 同じ日時に既存の自分の予定があるかチェック（変更時用）
     function findSameTimeSchedules(schedule, exclude = null) {
-      if (!schedule.time) return [];
+      if (!isValidTime(schedule.time)) return [];
 
       return schedules.filter(s =>
         s !== exclude &&
@@ -897,7 +902,7 @@
     function findDoubleBookings() {
       const groups = {};
       schedules.forEach(s => {
-        if (!s.isOther && s.time) {
+        if (!s.isOther && isValidTime(s.time)) {
           const key = `${s.date}_${s.time}`;
           if (!groups[key]) groups[key] = [];
           groups[key].push(s);
@@ -922,7 +927,7 @@
     function findSameTimeConflicts(schedulesArray) {
       const groups = {};
       schedulesArray.forEach((s, idx) => {
-        if (s.time && !s.isOther) {
+        if (isValidTime(s.time) && !s.isOther) {
           const key = `${s.date}_${s.time}`;
           if (!groups[key]) groups[key] = [];
           groups[key].push({ schedule: s, index: idx });
@@ -977,6 +982,12 @@
       return `${s.date}${timeStr} ${s.title}`;
     }
 
+    // ソート用の時間値を取得（未定は最後に）
+    function getSortableTime(time) {
+      if (!time || time === '未定') return '9999';
+      return time;
+    }
+
     function formatScheduleList() {
       if (schedules.length === 0) {
         return '予定はありません';
@@ -986,7 +997,7 @@
         const dateA = new Date(a.fullDate);
         const dateB = new Date(b.fullDate);
         if (dateA.getTime() !== dateB.getTime()) return dateA - dateB;
-        return (a.time || '0000') > (b.time || '0000') ? 1 : -1;
+        return getSortableTime(a.time) > getSortableTime(b.time) ? 1 : -1;
       });
 
       const grouped = {};
@@ -1438,7 +1449,7 @@
       // 当日の予定を取得
       const todaySchedules = schedules
         .filter(s => s.date === todayStr)
-        .sort((a, b) => (a.time || '0000') > (b.time || '0000') ? 1 : -1);
+        .sort((a, b) => getSortableTime(a.time) > getSortableTime(b.time) ? 1 : -1);
 
       // 今後の予定（当日以降）
       const futureSchedules = schedules
@@ -1447,7 +1458,7 @@
           const dateA = new Date(a.fullDate);
           const dateB = new Date(b.fullDate);
           if (dateA.getTime() !== dateB.getTime()) return dateA - dateB;
-          return (a.time || '0000') > (b.time || '0000') ? 1 : -1;
+          return getSortableTime(a.time) > getSortableTime(b.time) ? 1 : -1;
         });
 
       // 挨拶メッセージ
