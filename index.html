@@ -1314,7 +1314,8 @@
       // 単一予定
       const parsed = parseScheduleInput(cleanInput);
       if (parsed) {
-        parsed.isOther = isOther;
+        // parseScheduleInputで「他人の予定」キーワードが検出された場合、またはカッコで囲まれていた場合
+        parsed.isOther = parsed.isOther || isOther;
 
         // 重複チェック
         if (isDuplicate(parsed)) {
