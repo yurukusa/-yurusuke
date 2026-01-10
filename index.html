@@ -54,6 +54,10 @@
       font-size: 12px;
       cursor: pointer;
     }
+    .header-btn.icon-btn {
+      padding: 6px 10px;
+      font-size: 16px;
+    }
     .header-btn:hover { background: rgba(255,255,255,0.3); }
     .popup-overlay {
       position: fixed;
@@ -238,9 +242,28 @@
       cursor: pointer;
     }
     .input-form button:disabled { background: #ccc; }
+    .voice-btn {
+      padding: 12px 14px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .voice-btn:hover { background: #5a6268; }
+    .voice-btn.recording {
+      background: #dc3545;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
     .schedule-text {
-      font-family: inherit;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', monospace;
       line-height: 1.8;
+      font-size: 14px;
     }
     .schedule-text .other-schedule {
       color: #999;
@@ -256,11 +279,11 @@
   <div class="app">
     <header>
       <div class="header-buttons">
+        <button class="header-btn icon-btn" id="settingsBtn">⚙</button>
         <button class="header-btn" id="helpBtn">使い方</button>
-        <button class="header-btn" id="settingsBtn">設定</button>
       </div>
       <h1>ゆるスケ</h1>
-      <div style="width: 120px;"></div>
+      <div style="width: 100px;"></div>
     </header>
 
     <!-- 使い方ポップアップ -->
@@ -324,6 +347,7 @@
         <div class="messages" id="messages"></div>
         <form class="input-form" id="inputForm">
           <input type="text" id="inputField" placeholder="予定を入力..." autocomplete="off">
+          <button type="button" class="voice-btn" id="voiceBtn">🎤</button>
           <button type="submit">送信</button>
         </form>
       </div>
@@ -1249,13 +1273,13 @@
         grouped[s.date].push(s);
       });
 
-      // 固定幅インデント（日付の最大幅5文字 + スペース1文字 = 6文字分）
-      const INDENT = '\u3000\u3000\u3000';  // 全角スペース3つ = 半角6文字分
+      // 固定幅インデント（日付5文字 + スペース1文字 = 6文字分）
+      const INDENT = '      ';  // 半角スペース6つ
 
       let lines = ['予定！'];
       Object.keys(grouped).forEach(date => {
         // 日付を固定幅（5文字）にパディング
-        const paddedDate = date.padEnd(5, '\u00A0');  // 半角NBSPでパディング
+        const paddedDate = date.padEnd(5, ' ');
         grouped[date].forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
           let line;
@@ -1700,6 +1724,50 @@
       }
     });
 
+    // 音声入力（Web Speech API）
+    const voiceBtn = document.getElementById('voiceBtn');
+    let recognition = null;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        voiceBtn.classList.add('recording');
+      };
+
+      recognition.onend = () => {
+        voiceBtn.classList.remove('recording');
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        inputField.value = transcript;
+        inputField.focus();
+      };
+
+      recognition.onerror = (event) => {
+        voiceBtn.classList.remove('recording');
+        if (event.error !== 'no-speech') {
+          addMessage('system', '音声認識に失敗しました。');
+        }
+      };
+
+      voiceBtn.addEventListener('click', () => {
+        if (voiceBtn.classList.contains('recording')) {
+          recognition.stop();
+        } else {
+          recognition.start();
+        }
+      });
+    } else {
+      // 音声認識非対応
+      voiceBtn.style.display = 'none';
+    }
+
     // 初期化
     function initializeApp() {
       const now = new Date();
@@ -1737,13 +1805,13 @@
       // 挨拶メッセージ
       let greeting = 'おはようございます！<br><br>';
 
-      // 固定幅インデント
-      const INDENT = '\u3000\u3000\u3000';  // 全角スペース3つ
+      // 固定幅インデント（半角スペース6つ）
+      const INDENT = '      ';
 
       // 本日の予定
       if (todaySchedules.length > 0) {
         greeting += '本日の予定：<br>';
-        const paddedTodayStr = todayStr.padEnd(5, '\u00A0');
+        const paddedTodayStr = todayStr.padEnd(5, ' ');
         todaySchedules.forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
           if (s.isOther) {
@@ -1775,7 +1843,7 @@
           grouped[s.date].push(s);
         });
         Object.keys(grouped).forEach(date => {
-          const paddedDate = date.padEnd(5, '\u00A0');
+          const paddedDate = date.padEnd(5, ' ');
           grouped[date].forEach((s, idx) => {
             const timeStr = s.time ? `${s.time} ` : '';
             if (s.isOther) {
