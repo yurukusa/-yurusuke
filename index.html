@@ -359,19 +359,21 @@
         if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
           const dateResult = parseDateFromText(dateStr);
           if (dateResult) {
-            return {
+            const result = {
               date: `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`,
               time: timeStr,
               title: titleInParen,
               fullDate: dateResult.date.toISOString(),
               isOther: true
             };
+            console.log('[parseScheduleInput] カッコ内時間形式:', input, '→', result);
+            return result;
           }
         }
       }
 
       // 時間がカッコ外、タイトルのみカッコ内（例：12/14 0800 (ドリフ)）
-      const timeOutsideParenMatch = input.match(/^(.+?)\s+(\d{3,4})\s+[（(](.+?)[)）]$/);
+      const timeOutsideParenMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
       if (timeOutsideParenMatch) {
         const dateStr = timeOutsideParenMatch[1].trim();
         const timeStr = timeOutsideParenMatch[2].padStart(4, '0');
@@ -382,13 +384,15 @@
         if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
           const dateResult = parseDateFromText(dateStr);
           if (dateResult) {
-            return {
+            const result = {
               date: `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`,
               time: timeStr,
               title: titleInParen,
               fullDate: dateResult.date.toISOString(),
               isOther: true
             };
+            console.log('[parseScheduleInput] 時間カッコ外形式:', input, '→', result);
+            return result;
           }
         }
       }
