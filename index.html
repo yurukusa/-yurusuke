@@ -377,12 +377,20 @@
         .replace(/\s+/g, ' ')
         .trim();
 
+      // 末尾に「他人の予定」「他人」「家族の予定」「家族」があればisOther: true
+      let isOther = false;
+      const otherMatch = title.match(/[\s　]*(他人の?予定|他人|家族の?予定|家族)$/);
+      if (otherMatch) {
+        isOther = true;
+        title = title.replace(otherMatch[0], '').trim();
+      }
+
       return {
         date: `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`,
         time: timeResult ? formatTime(timeResult.time) : null,
         title: title || '予定',
         fullDate: dateResult.date.toISOString(),
-        isOther: false
+        isOther: isOther
       };
     }
 
