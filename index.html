@@ -345,12 +345,7 @@
     // 予定追加パーサー
     // ============================================
     function parseScheduleInput(input) {
-      console.log("=== parseScheduleInput ===");
-      console.log("入力:", input);
-
-      // 時間カッコ外形式のテスト
-      const timeOutsideParenMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
-      console.log("時間カッコ外パターンマッチ:", timeOutsideParenMatch);
+      console.log("=== parseScheduleInput ===", input);
 
       let title = input;
 
