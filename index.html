@@ -390,77 +390,133 @@
     // 複数予定パーサー
     // ============================================
     // 日付パターンの正規表現（分割用）
-    const datePatternRegex = /(\d{1,2}[\/月]\d{1,2}日?|(?:今日|明日|明後日|あさって|しあさって)|(?:来週|今週|再来週)の?[日月火水木金土]曜?日?|今度の?[日月火水木金土]曜?日?|\d+日後|\d+週間?後|(?:今月|来月|再来月)(?:末|頭|初め?|あたま|はじめ))/g;
+    const datePatternRegex = /(\d{1,2}[\/月]\d{1,2}日?|(?:今日|明日|明後日|あさって|しあさって)|(?:来週|今週|再来週)の?[日月火水木金土]曜?日?|(?:今度|次)の?[日月火水木金土]曜?日?|\d+日後|\d+週間?後|(?:今月|来月|再来月)(?:末|頭|初め?|あたま|はじめ))/g;
 
     function parseMultipleSchedules(input) {
-      // 日付パターンの位置を検出
-      const dateMatches = [...input.matchAll(datePatternRegex)].map(m => ({
-        index: m.index,
-        type: 'date',
-        match: m[0]
-      }));
+      // 先頭の無関係な文字を除去（日付パターンを探す）
+      const firstDateMatch = input.match(datePatternRegex);
+      if (!firstDateMatch) return null;
+
+      let workInput = input;
+      if (firstDateMatch.index > 0) {
+        workInput = input.slice(firstDateMatch.index);
+      }
+
+      // 区切りパターンの位置を検出
+      const allMatches = [];
+
+      // 日付パターンを検出
+      const dateMatches = [...workInput.matchAll(datePatternRegex)];
+      dateMatches.forEach(m => {
+        allMatches.push({ index: m.index, type: 'date', match: m[0] });
+      });
+
+      // カッコ付き予定「(」を検出（新しい予定の区切り）
+      const parenRegex = /[（(](\d{3,4}\s)/g;
+      let parenMatch;
+      while ((parenMatch = parenRegex.exec(workInput)) !== null) {
+        allMatches.push({ index: parenMatch.index, type: 'paren', match: parenMatch[0] });
+      }
 
       // 時間パターン（空白後の4桁数字）を検出
-      const timeMatches = [];
       const timeRegex = /\s(\d{4})(?=\s|$|\D)/g;
       let match;
-      while ((match = timeRegex.exec(input)) !== null) {
-        const timeIndex = match.index + 1; // 空白の次の位置
+      while ((match = timeRegex.exec(workInput)) !== null) {
+        const timeIndex = match.index + 1;
         const timeStr = match[1];
-        // 有効な時間かチェック（00-23時、00-59分）
         const h = parseInt(timeStr.slice(0, 2));
         const m = parseInt(timeStr.slice(2));
         if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-          timeMatches.push({ index: timeIndex, type: 'time', match: timeStr });
+          // 日付やカッコの直後ではない時間のみ
+          const isAfterDate = dateMatches.some(dm => {
+            const dmEnd = dm.index + dm[0].length;
+            return timeIndex > dmEnd && timeIndex <= dmEnd + 2;
+          });
+          if (!isAfterDate) {
+            allMatches.push({ index: timeIndex, type: 'time', match: timeStr });
+          }
         }
       }
 
-      // 日付の直後の時間は除外（それは日付に付随する時間）
-      const filteredTimeMatches = timeMatches.filter(tm => {
-        return !dateMatches.some(dm => {
-          const dmEnd = dm.index + dm.match.length;
-          // 日付の直後（空白1つ分）なら除外
-          return tm.index > dmEnd && tm.index <= dmEnd + 2;
-        });
-      });
-
-      // 全ての区切りをマージしてソート
-      const allMatches = [...dateMatches, ...filteredTimeMatches].sort((a, b) => a.index - b.index);
+      // ソートして重複を除去
+      allMatches.sort((a, b) => a.index - b.index);
 
       if (allMatches.length <= 1) {
         return null;
       }
 
-      // 各区切り位置で入力を分割
-      const segments = [];
-      for (let i = 0; i < allMatches.length; i++) {
-        const start = allMatches[i].index;
-        const end = i < allMatches.length - 1 ? allMatches[i + 1].index : input.length;
-        const segment = input.slice(start, end).trim();
-        const hasDate = allMatches[i].type === 'date';
-        if (segment) {
-          segments.push({ text: segment, hasDate });
-        }
-      }
-
-      // 各セグメントをパース（日付がない場合は直前から引き継ぐ）
+      // 各セグメントをパース
       const parsed = [];
       let lastDate = null;
       let lastFullDate = null;
 
-      for (const seg of segments) {
-        if (seg.hasDate) {
-          const schedule = parseScheduleInput(seg.text);
+      for (let i = 0; i < allMatches.length; i++) {
+        const start = allMatches[i].index;
+        const end = i < allMatches.length - 1 ? allMatches[i + 1].index : workInput.length;
+        let segment = workInput.slice(start, end).trim();
+        const matchType = allMatches[i].type;
+
+        if (!segment) continue;
+
+        // 「1/14 1900 (飲み会)」のような形式を処理
+        // 時間の後にカッコがある場合、時間もカッコ内に含める
+        const timeParenMatch = segment.match(/^(\d{1,2}[\/月]\d{1,2}日?)\s+(\d{4})\s+[（(](.+?)[)）]$/);
+        if (timeParenMatch) {
+          const dateResult = parseDateFromText(timeParenMatch[1]);
+          if (dateResult) {
+            lastDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
+            lastFullDate = dateResult.date.toISOString();
+            parsed.push({
+              date: lastDate,
+              time: timeParenMatch[2],
+              title: timeParenMatch[3].trim(),
+              fullDate: lastFullDate,
+              isOther: true
+            });
+            continue;
+          }
+        }
+
+        // カッコ付き予定（他人の予定）
+        if (matchType === 'paren') {
+          // カッコ内の内容を抽出
+          const parenContent = segment.match(/^[（(](.+?)[)）]?/);
+          if (parenContent && lastDate) {
+            const content = parenContent[1];
+            const timeResult = parseTimeFromText(content);
+            let title = content;
+            let time = null;
+            if (timeResult) {
+              time = formatTime(timeResult.time);
+              title = content.replace(timeResult.consumed, '').trim();
+            }
+            parsed.push({
+              date: lastDate,
+              time: time,
+              title: title || '予定',
+              fullDate: lastFullDate,
+              isOther: true
+            });
+          }
+          continue;
+        }
+
+        // 通常の日付付き予定
+        if (matchType === 'date') {
+          const schedule = parseScheduleInput(segment);
           if (schedule) {
             parsed.push(schedule);
             lastDate = schedule.date;
             lastFullDate = schedule.fullDate;
           }
-        } else if (lastDate) {
-          // 日付なし（時間から始まる）→直前の日付を引き継ぐ
-          const timeResult = parseTimeFromText(seg.text);
+          continue;
+        }
+
+        // 時間のみ（日付を引き継ぐ）
+        if (matchType === 'time' && lastDate) {
+          const timeResult = parseTimeFromText(segment);
           if (timeResult) {
-            let title = seg.text.replace(timeResult.consumed, '').trim();
+            let title = segment.replace(timeResult.consumed, '').trim();
             title = title.replace(/^[、,のにはへと]\s*/, '').replace(/\s*[、,のにはへと]$/, '').trim();
             parsed.push({
               date: lastDate,
@@ -886,17 +942,23 @@
       Object.keys(grouped).forEach(date => {
         grouped[date].forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
-          let content;
+          let line;
           if (s.isOther) {
-            content = `<span class="other-schedule">(${timeStr}${s.title})</span>`;
+            const content = `(${timeStr}${s.title})`;
+            if (idx === 0) {
+              line = `<span class="other-schedule">${date} ${content}</span>`;
+            } else {
+              line = `<span class="other-schedule">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}</span>`;
+            }
           } else {
-            content = `${timeStr}${s.title}`;
+            const content = `${timeStr}${s.title}`;
+            if (idx === 0) {
+              line = `${date} ${content}`;
+            } else {
+              line = `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}`;
+            }
           }
-          if (idx === 0) {
-            lines.push(`${date} ${content}`);
-          } else {
-            lines.push(`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}`);
-          }
+          lines.push(line);
         });
       });
 
@@ -1324,16 +1386,20 @@
         greeting += '本日の予定：<br>';
         todaySchedules.forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
-          let content;
           if (s.isOther) {
-            content = `<span class="other-schedule">(${timeStr}${s.title})</span>`;
+            const content = `(${timeStr}${s.title})`;
+            if (idx === 0) {
+              greeting += `<span class="other-schedule">${s.date} ${content}</span><br>`;
+            } else {
+              greeting += `<span class="other-schedule">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}</span><br>`;
+            }
           } else {
-            content = `${timeStr}${s.title}`;
-          }
-          if (idx === 0) {
-            greeting += `${s.date} ${content}<br>`;
-          } else {
-            greeting += `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}<br>`;
+            const content = `${timeStr}${s.title}`;
+            if (idx === 0) {
+              greeting += `${s.date} ${content}<br>`;
+            } else {
+              greeting += `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}<br>`;
+            }
           }
         });
       } else {
@@ -1351,16 +1417,20 @@
         Object.keys(grouped).forEach(date => {
           grouped[date].forEach((s, idx) => {
             const timeStr = s.time ? `${s.time} ` : '';
-            let content;
             if (s.isOther) {
-              content = `<span class="other-schedule">(${timeStr}${s.title})</span>`;
+              const content = `(${timeStr}${s.title})`;
+              if (idx === 0) {
+                greeting += `<span class="other-schedule">${date} ${content}</span><br>`;
+              } else {
+                greeting += `<span class="other-schedule">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}</span><br>`;
+              }
             } else {
-              content = `${timeStr}${s.title}`;
-            }
-            if (idx === 0) {
-              greeting += `${date} ${content}<br>`;
-            } else {
-              greeting += `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}<br>`;
+              const content = `${timeStr}${s.title}`;
+              if (idx === 0) {
+                greeting += `${date} ${content}<br>`;
+              } else {
+                greeting += `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}<br>`;
+              }
             }
           });
         });
