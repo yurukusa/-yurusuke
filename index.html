@@ -492,6 +492,7 @@
 
       // 各セグメントをパース
       const parsed = [];
+      const skipped = []; // スキップされた予定を記録
       let lastDate = null;
       let lastFullDate = null;
 
@@ -509,9 +510,9 @@
           const dateResult = parseDateFromText(timeParenMatch[1]);
           if (dateResult) {
             const title = timeParenMatch[3].trim();
+            lastDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
+            lastFullDate = dateResult.date.toISOString();
             if (!isInvalidTitle(title)) {
-              lastDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
-              lastFullDate = dateResult.date.toISOString();
               parsed.push({
                 date: lastDate,
                 time: timeParenMatch[2],
@@ -519,6 +520,8 @@
                 fullDate: lastFullDate,
                 isOther: true
               });
+            } else {
+              skipped.push(`${lastDate} ${timeParenMatch[2]} ${title || '(空)'}`);
             }
             continue;
           }
@@ -527,14 +530,18 @@
         // カッコ付き予定（他人の予定）- 事前に抽出したデータを使用
         if (matchType === 'paren') {
           const parenData = allMatches[i].parenData;
-          if (parenData && lastDate && !isInvalidTitle(parenData.title)) {
-            parsed.push({
-              date: lastDate,
-              time: parenData.time,
-              title: parenData.title,
-              fullDate: lastFullDate,
-              isOther: true
-            });
+          if (parenData && lastDate) {
+            if (!isInvalidTitle(parenData.title)) {
+              parsed.push({
+                date: lastDate,
+                time: parenData.time,
+                title: parenData.title,
+                fullDate: lastFullDate,
+                isOther: true
+              });
+            } else {
+              skipped.push(`${lastDate} (${parenData.time} ${parenData.title || '(空)'})`);
+            }
           }
           continue;
         }
@@ -542,14 +549,15 @@
         // 通常の日付付き予定
         if (matchType === 'date') {
           const schedule = parseScheduleInput(segment);
-          if (schedule && !isInvalidTitle(schedule.title)) {
-            parsed.push(schedule);
+          if (schedule) {
             lastDate = schedule.date;
             lastFullDate = schedule.fullDate;
-          } else if (schedule) {
-            // タイトルが無効でも日付は記録
-            lastDate = schedule.date;
-            lastFullDate = schedule.fullDate;
+            if (!isInvalidTitle(schedule.title)) {
+              parsed.push(schedule);
+            } else {
+              const timeStr = schedule.time ? ` ${schedule.time}` : '';
+              skipped.push(`${schedule.date}${timeStr} ${schedule.title || '(空)'}`);
+            }
           }
           continue;
         }
@@ -568,12 +576,17 @@
                 fullDate: lastFullDate,
                 isOther: false
               });
+            } else {
+              skipped.push(`${lastDate} ${formatTime(timeResult.time)} ${title || '(空)'}`);
             }
           }
         }
       }
 
-      return parsed.length > 1 ? parsed : null;
+      if (parsed.length > 1) {
+        return { schedules: parsed, skipped: skipped };
+      }
+      return null;
     }
 
     // ============================================
@@ -1294,8 +1307,17 @@
       const cleanInput = input.replace(/^[（(]|[)）]$/g, '');
 
       // 複数予定かチェック
-      const multipleSchedules = parseMultipleSchedules(cleanInput);
-      if (multipleSchedules) {
+      const multipleResult = parseMultipleSchedules(cleanInput);
+      if (multipleResult) {
+        const multipleSchedules = multipleResult.schedules;
+        const skippedSchedules = multipleResult.skipped;
+
+        // スキップされた予定がある場合は警告を表示
+        if (skippedSchedules.length > 0) {
+          const skippedText = skippedSchedules.join('<br>');
+          addMessage('system', `⚠ パースできなかった部分があります：<br>${skippedText}`);
+        }
+
         multipleSchedules.forEach(s => s.isOther = isOther);
         const originalCount = multipleSchedules.length;
 
