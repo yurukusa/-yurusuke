@@ -929,13 +929,14 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    // 重複チェック（excludeで指定した予定は除外）
+    // 重複チェック（isOtherも条件に含める：自分の予定と他人の予定は別扱い）
     function isDuplicate(schedule, exclude = null) {
       return schedules.some(s =>
         s !== exclude &&
         s.date === schedule.date &&
         s.time === schedule.time &&
-        s.title === schedule.title
+        s.title === schedule.title &&
+        !!s.isOther === !!schedule.isOther
       );
     }
 
