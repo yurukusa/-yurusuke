@@ -346,6 +346,8 @@
     // ============================================
     function parseScheduleInput(input) {
       console.log("=== parseScheduleInput ===", input);
+      console.log("入力の文字コード:", [...input].map(c => c.charCodeAt(0)));
+      console.log("入力の各文字:", [...input].map(c => `'${c}'(${c.charCodeAt(0)})`).join(' '));
 
       const debugMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
       console.log("時間カッコ外パターンマッチ:", debugMatch);
