@@ -1249,26 +1249,29 @@
         grouped[s.date].push(s);
       });
 
+      // 固定幅インデント（日付の最大幅5文字 + スペース1文字 = 6文字分）
+      const INDENT = '\u3000\u3000\u3000';  // 全角スペース3つ = 半角6文字分
+
       let lines = ['予定！'];
       Object.keys(grouped).forEach(date => {
-        // 日付の幅に合わせたインデント用スペースを生成（日付 + スペース1つ分）
-        const indent = '&nbsp;'.repeat(date.length + 1);
+        // 日付を固定幅（5文字）にパディング
+        const paddedDate = date.padEnd(5, '\u00A0');  // 半角NBSPでパディング
         grouped[date].forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
           let line;
           if (s.isOther) {
             const content = `(${timeStr}${s.title})`;
             if (idx === 0) {
-              line = `<span class="other-schedule">${date} ${content}</span>`;
+              line = `<span class="other-schedule">${paddedDate} ${content}</span>`;
             } else {
-              line = `<span class="other-schedule">${indent}${content}</span>`;
+              line = `<span class="other-schedule">${INDENT}${content}</span>`;
             }
           } else {
             const content = `${timeStr}${s.title}`;
             if (idx === 0) {
-              line = `${date} ${content}`;
+              line = `${paddedDate} ${content}`;
             } else {
-              line = `${indent}${content}`;
+              line = `${INDENT}${content}`;
             }
           }
           lines.push(line);
@@ -1734,25 +1737,28 @@
       // 挨拶メッセージ
       let greeting = 'おはようございます！<br><br>';
 
+      // 固定幅インデント
+      const INDENT = '\u3000\u3000\u3000';  // 全角スペース3つ
+
       // 本日の予定
       if (todaySchedules.length > 0) {
         greeting += '本日の予定：<br>';
-        const todayIndent = '&nbsp;'.repeat(todayStr.length + 1);
+        const paddedTodayStr = todayStr.padEnd(5, '\u00A0');
         todaySchedules.forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
           if (s.isOther) {
             const content = `(${timeStr}${s.title})`;
             if (idx === 0) {
-              greeting += `<span class="other-schedule">${s.date} ${content}</span><br>`;
+              greeting += `<span class="other-schedule">${paddedTodayStr} ${content}</span><br>`;
             } else {
-              greeting += `<span class="other-schedule">${todayIndent}${content}</span><br>`;
+              greeting += `<span class="other-schedule">${INDENT}${content}</span><br>`;
             }
           } else {
             const content = `${timeStr}${s.title}`;
             if (idx === 0) {
-              greeting += `${s.date} ${content}<br>`;
+              greeting += `${paddedTodayStr} ${content}<br>`;
             } else {
-              greeting += `${todayIndent}${content}<br>`;
+              greeting += `${INDENT}${content}<br>`;
             }
           }
         });
@@ -1769,22 +1775,22 @@
           grouped[s.date].push(s);
         });
         Object.keys(grouped).forEach(date => {
-          const indent = '&nbsp;'.repeat(date.length + 1);
+          const paddedDate = date.padEnd(5, '\u00A0');
           grouped[date].forEach((s, idx) => {
             const timeStr = s.time ? `${s.time} ` : '';
             if (s.isOther) {
               const content = `(${timeStr}${s.title})`;
               if (idx === 0) {
-                greeting += `<span class="other-schedule">${date} ${content}</span><br>`;
+                greeting += `<span class="other-schedule">${paddedDate} ${content}</span><br>`;
               } else {
-                greeting += `<span class="other-schedule">${indent}${content}</span><br>`;
+                greeting += `<span class="other-schedule">${INDENT}${content}</span><br>`;
               }
             } else {
               const content = `${timeStr}${s.title}`;
               if (idx === 0) {
-                greeting += `${date} ${content}<br>`;
+                greeting += `${paddedDate} ${content}<br>`;
               } else {
-                greeting += `${indent}${content}<br>`;
+                greeting += `${INDENT}${content}<br>`;
               }
             }
           });
