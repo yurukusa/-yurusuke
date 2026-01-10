@@ -149,6 +149,9 @@
       font-family: inherit;
       line-height: 1.6;
     }
+    .other-schedule {
+      color: #999;
+    }
     @supports (padding-bottom: env(safe-area-inset-bottom)) {
       .input-form {
         padding-bottom: calc(12px + env(safe-area-inset-bottom));
@@ -160,7 +163,7 @@
   <div class="app">
     <header>
       <div class="header-spacer"></div>
-      <h1>予定管理</h1>
+      <h1>ゆるスケ</h1>
       <button class="reset-btn" id="resetBtn">リセット</button>
     </header>
     <div class="main-container">
@@ -228,10 +231,10 @@
         consumed = weekMatch[0];
       }
 
-      // 今度の + 曜日
-      const nextWeekdayMatch = input.match(/今度の?([日月火水木金土])曜?日?/);
+      // 今度の/次の + 曜日
+      const nextWeekdayMatch = input.match(/(今度|次)の?([日月火水木金土])曜?日?/);
       if (nextWeekdayMatch && !date) {
-        const targetDay = weekdayMap[nextWeekdayMatch[1]];
+        const targetDay = weekdayMap[nextWeekdayMatch[2]];
         date = new Date(today);
         let daysToAdd = targetDay - date.getDay();
         if (daysToAdd <= 0) daysToAdd += 7;
@@ -872,16 +875,21 @@
       Object.keys(grouped).forEach(date => {
         grouped[date].forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
-          const content = s.isOther ? `(${timeStr}${s.title})` : `${timeStr}${s.title}`;
+          let content;
+          if (s.isOther) {
+            content = `<span class="other-schedule">(${timeStr}${s.title})</span>`;
+          } else {
+            content = `${timeStr}${s.title}`;
+          }
           if (idx === 0) {
             lines.push(`${date} ${content}`);
           } else {
-            lines.push(`      ${content}`);
+            lines.push(`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}`);
           }
         });
       });
 
-      return lines.join('\n');
+      return lines.join('<br>');
     }
 
     function showScheduleList() {
@@ -1305,7 +1313,12 @@
         greeting += '本日の予定：<br>';
         todaySchedules.forEach((s, idx) => {
           const timeStr = s.time ? `${s.time} ` : '';
-          const content = s.isOther ? `(${timeStr}${s.title})` : `${timeStr}${s.title}`;
+          let content;
+          if (s.isOther) {
+            content = `<span class="other-schedule">(${timeStr}${s.title})</span>`;
+          } else {
+            content = `${timeStr}${s.title}`;
+          }
           if (idx === 0) {
             greeting += `${s.date} ${content}<br>`;
           } else {
@@ -1327,7 +1340,12 @@
         Object.keys(grouped).forEach(date => {
           grouped[date].forEach((s, idx) => {
             const timeStr = s.time ? `${s.time} ` : '';
-            const content = s.isOther ? `(${timeStr}${s.title})` : `${timeStr}${s.title}`;
+            let content;
+            if (s.isOther) {
+              content = `<span class="other-schedule">(${timeStr}${s.title})</span>`;
+            } else {
+              content = `${timeStr}${s.title}`;
+            }
             if (idx === 0) {
               greeting += `${date} ${content}<br>`;
             } else {
