@@ -400,6 +400,15 @@
     // 日付パターンの正規表現（分割用）
     const datePatternRegex = /(\d{1,2}[\/月]\d{1,2}日?|(?:今日|明日|明後日|あさって|しあさって)|(?:来週|今週|再来週)の?[日月火水木金土]曜?日?|(?:今度|次)の?[日月火水木金土]曜?日?|\d+日後|\d+週間?後|(?:今月|来月|再来月)(?:末|頭|初め?|あたま|はじめ))/g;
 
+    // 無効なタイトルかどうかをチェック
+    function isInvalidTitle(title) {
+      if (!title) return true;
+      // 「予定」のみ、または1-3桁の数字のみは無効
+      if (title === '予定') return true;
+      if (/^\d{1,3}$/.test(title)) return true;
+      return false;
+    }
+
     function parseMultipleSchedules(input) {
       // 先頭の無関係な文字を除去（日付パターンを探す）
       const firstDateMatch = input.match(datePatternRegex);
@@ -410,32 +419,60 @@
         workInput = input.slice(firstDateMatch.index);
       }
 
+      // カッコ付き予定を先に抽出（カッコ内を保護）
+      const parenSchedules = [];
+      const parenRanges = []; // カッコの範囲を記録
+      const fullParenRegex = /[（(](\d{3,4})\s+(.+?)[)）]/g;
+      let parenMatch;
+      while ((parenMatch = fullParenRegex.exec(workInput)) !== null) {
+        const timeStr = parenMatch[1].padStart(4, '0');
+        const h = parseInt(timeStr.slice(0, 2));
+        const m = parseInt(timeStr.slice(2));
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          parenSchedules.push({
+            index: parenMatch.index,
+            endIndex: parenMatch.index + parenMatch[0].length,
+            time: timeStr,
+            title: parenMatch[2].trim(),
+            isOther: true
+          });
+          parenRanges.push({ start: parenMatch.index, end: parenMatch.index + parenMatch[0].length });
+        }
+      }
+
+      // カッコ範囲内かどうかをチェックする関数
+      function isInsideParen(index) {
+        return parenRanges.some(r => index > r.start && index < r.end);
+      }
+
       // 区切りパターンの位置を検出
       const allMatches = [];
 
-      // 日付パターンを検出
+      // 日付パターンを検出（カッコ内は除外）
       const dateMatches = [...workInput.matchAll(datePatternRegex)];
       dateMatches.forEach(m => {
-        allMatches.push({ index: m.index, type: 'date', match: m[0] });
+        if (!isInsideParen(m.index)) {
+          allMatches.push({ index: m.index, type: 'date', match: m[0] });
+        }
       });
 
-      // カッコ付き予定「(」を検出（新しい予定の区切り）
-      const parenRegex = /[（(](\d{3,4}\s)/g;
-      let parenMatch;
-      while ((parenMatch = parenRegex.exec(workInput)) !== null) {
-        allMatches.push({ index: parenMatch.index, type: 'paren', match: parenMatch[0] });
-      }
+      // カッコ付き予定の開始位置を追加
+      parenSchedules.forEach(ps => {
+        allMatches.push({ index: ps.index, type: 'paren', parenData: ps });
+      });
 
-      // 時間パターン（空白後の4桁数字）を検出
+      // 時間パターン（空白後の4桁数字）を検出（カッコ内は除外）
       const timeRegex = /\s(\d{4})(?=\s|$|\D)/g;
       let match;
       while ((match = timeRegex.exec(workInput)) !== null) {
         const timeIndex = match.index + 1;
+        if (isInsideParen(timeIndex)) continue;
+
         const timeStr = match[1];
         const h = parseInt(timeStr.slice(0, 2));
         const m = parseInt(timeStr.slice(2));
         if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-          // 日付やカッコの直後ではない時間のみ
+          // 日付の直後ではない時間のみ
           const isAfterDate = dateMatches.some(dm => {
             const dmEnd = dm.index + dm[0].length;
             return timeIndex > dmEnd && timeIndex <= dmEnd + 2;
@@ -467,41 +504,34 @@
         if (!segment) continue;
 
         // 「1/14 1900 (飲み会)」のような形式を処理
-        // 時間の後にカッコがある場合、時間もカッコ内に含める
         const timeParenMatch = segment.match(/^(\d{1,2}[\/月]\d{1,2}日?)\s+(\d{4})\s+[（(](.+?)[)）]$/);
         if (timeParenMatch) {
           const dateResult = parseDateFromText(timeParenMatch[1]);
           if (dateResult) {
-            lastDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
-            lastFullDate = dateResult.date.toISOString();
-            parsed.push({
-              date: lastDate,
-              time: timeParenMatch[2],
-              title: timeParenMatch[3].trim(),
-              fullDate: lastFullDate,
-              isOther: true
-            });
+            const title = timeParenMatch[3].trim();
+            if (!isInvalidTitle(title)) {
+              lastDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
+              lastFullDate = dateResult.date.toISOString();
+              parsed.push({
+                date: lastDate,
+                time: timeParenMatch[2],
+                title: title,
+                fullDate: lastFullDate,
+                isOther: true
+              });
+            }
             continue;
           }
         }
 
-        // カッコ付き予定（他人の予定）
+        // カッコ付き予定（他人の予定）- 事前に抽出したデータを使用
         if (matchType === 'paren') {
-          // カッコ内の内容を抽出
-          const parenContent = segment.match(/^[（(](.+?)[)）]?/);
-          if (parenContent && lastDate) {
-            const content = parenContent[1];
-            const timeResult = parseTimeFromText(content);
-            let title = content;
-            let time = null;
-            if (timeResult) {
-              time = formatTime(timeResult.time);
-              title = content.replace(timeResult.consumed, '').trim();
-            }
+          const parenData = allMatches[i].parenData;
+          if (parenData && lastDate && !isInvalidTitle(parenData.title)) {
             parsed.push({
               date: lastDate,
-              time: time,
-              title: title || '予定',
+              time: parenData.time,
+              title: parenData.title,
               fullDate: lastFullDate,
               isOther: true
             });
@@ -512,8 +542,12 @@
         // 通常の日付付き予定
         if (matchType === 'date') {
           const schedule = parseScheduleInput(segment);
-          if (schedule) {
+          if (schedule && !isInvalidTitle(schedule.title)) {
             parsed.push(schedule);
+            lastDate = schedule.date;
+            lastFullDate = schedule.fullDate;
+          } else if (schedule) {
+            // タイトルが無効でも日付は記録
             lastDate = schedule.date;
             lastFullDate = schedule.fullDate;
           }
@@ -526,13 +560,15 @@
           if (timeResult) {
             let title = segment.replace(timeResult.consumed, '').trim();
             title = title.replace(/^[、,のにはへと]\s*/, '').replace(/\s*[、,のにはへと]$/, '').trim();
-            parsed.push({
-              date: lastDate,
-              time: formatTime(timeResult.time),
-              title: title || '予定',
-              fullDate: lastFullDate,
-              isOther: false
-            });
+            if (!isInvalidTitle(title)) {
+              parsed.push({
+                date: lastDate,
+                time: formatTime(timeResult.time),
+                title: title,
+                fullDate: lastFullDate,
+                isOther: false
+              });
+            }
           }
         }
       }
