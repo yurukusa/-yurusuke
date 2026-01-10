@@ -410,13 +410,15 @@
     }
 
     function parseMultipleSchedules(input) {
+      // 先頭の「予定！」「予定! 」などを除去
+      let workInput = input.replace(/^予定[！!]?\s*/, '');
+
       // 先頭の無関係な文字を除去（日付パターンを探す）
-      const firstDateMatch = input.match(datePatternRegex);
+      const firstDateMatch = workInput.match(datePatternRegex);
       if (!firstDateMatch) return null;
 
-      let workInput = input;
       if (firstDateMatch.index > 0) {
-        workInput = input.slice(firstDateMatch.index);
+        workInput = workInput.slice(firstDateMatch.index);
       }
 
       // カッコ付き予定を先に抽出（カッコ内を保護）
@@ -555,8 +557,13 @@
             if (!isInvalidTitle(schedule.title)) {
               parsed.push(schedule);
             } else {
-              const timeStr = schedule.time ? ` ${schedule.time}` : '';
-              skipped.push(`${schedule.date}${timeStr} ${schedule.title || '(空)'}`);
+              // 次のマッチがカッコ付き予定の場合は、日付のみを記録して警告を出さない
+              const nextMatch = i < allMatches.length - 1 ? allMatches[i + 1] : null;
+              const nextIsParen = nextMatch && nextMatch.type === 'paren';
+              if (!nextIsParen) {
+                const timeStr = schedule.time && schedule.time !== '未定' ? ` ${schedule.time}` : '';
+                skipped.push(`${schedule.date}${timeStr} ${schedule.title || '(空)'}`);
+              }
             }
           }
           continue;
