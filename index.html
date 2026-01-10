@@ -492,9 +492,10 @@
       }
 
       // カッコ付き予定を先に抽出（カッコ内を保護）
+      // 「(1000 れいな)」「(1000れいな)」両方に対応
       const parenSchedules = [];
       const parenRanges = []; // カッコの範囲を記録
-      const fullParenRegex = /[（(](\d{3,4})\s+(.+?)[)）]/g;
+      const fullParenRegex = /[（(](\d{3,4})\s*(.+?)[)）]/g;
       let parenMatch;
       while ((parenMatch = fullParenRegex.exec(workInput)) !== null) {
         const timeStr = parenMatch[1].padStart(4, '0');
@@ -576,8 +577,9 @@
 
         if (!segment) continue;
 
-        // 「1/14 1900 (飲み会)」のような形式を処理
-        const timeParenMatch = segment.match(/^(\d{1,2}[\/月]\d{1,2}日?)\s+(\d{4})\s+[（(](.+?)[)）]$/);
+        // 「1/14 1900 (飲み会)」「1/14 1900(飲み会)」「1/14 1900( 飲み会)」のような形式を処理
+        // 時間とカッコの間のスペースは任意、カッコ内のタイトル前のスペースも任意
+        const timeParenMatch = segment.match(/^(\d{1,2}[\/月]\d{1,2}日?)\s+(\d{4})\s*[（(]\s*(.+?)[)）]$/);
         if (timeParenMatch) {
           const dateResult = parseDateFromText(timeParenMatch[1]);
           if (dateResult) {
