@@ -1392,7 +1392,8 @@
 
       // 新規追加
       const isOther = input.startsWith('(') || input.startsWith('（');
-      const cleanInput = input.replace(/^[（(]|[)）]$/g, '');
+      // 先頭が開きカッコで始まる場合のみ、両端のカッコを削除
+      const cleanInput = isOther ? input.replace(/^[（(]/, '').replace(/[)）]$/, '') : input;
 
       // 複数予定かチェック
       const multipleResult = parseMultipleSchedules(cleanInput);
