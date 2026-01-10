@@ -1407,7 +1407,8 @@
           addMessage('system', `⚠ パースできなかった部分があります：<br>${skippedText}`);
         }
 
-        multipleSchedules.forEach(s => s.isOther = isOther);
+        // 既にisOther: trueが設定されている予定は上書きしない
+        multipleSchedules.forEach(s => s.isOther = s.isOther || isOther);
         const originalCount = multipleSchedules.length;
 
         // 既存予定との重複のみ自動除外（入力内の重複は選択式で確認）
