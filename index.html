@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ゆるスケ</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ゆるスケ">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <meta name="description" content="ゆるく予定を管理するアプリ">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    .app {
+      max-width: 600px;
+      margin: 0 auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+    header {
+      background: #4a90d9;
+      color: white;
+      padding: 12px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    .reset-btn {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .reset-btn:hover { background: rgba(255,255,255,0.3); }
+    .header-spacer { width: 60px; }
+    .main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .chat-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .message {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      line-height: 1.4;
+      font-size: 15px;
+    }
+    .message.user {
+      align-self: flex-end;
+      background: #4a90d9;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .message.system {
+      align-self: flex-start;
+      background: #e8e8e8;
+      color: #333;
+      border-bottom-left-radius: 4px;
+    }
+    .message.confirm {
+      align-self: flex-start;
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffc107;
+      border-bottom-left-radius: 4px;
+    }
+    .confirm-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .confirm-buttons button {
+      flex: 1;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-ok { background: #28a745; color: white; }
+    .btn-cancel { background: #dc3545; color: white; }
+    .btn-skip { background: #6c757d; color: white; }
+    .btn-add { background: #007bff; color: white; }
+    .input-form {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #fff;
+      border-top: 1px solid #e0e0e0;
+    }
+    .input-form input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 24px;
+      font-size: 16px;
+      outline: none;
+    }
+    .input-form input:focus { border-color: #4a90d9; }
+    .input-form input:disabled { background: #f5f5f5; }
+    .input-form button {
+      padding: 12px 20px;
+      background: #4a90d9;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .input-form button:disabled { background: #ccc; }
+    .schedule-text {
+      white-space: pre-wrap;
+      font-family: inherit;
+      line-height: 1.6;
+    }
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .input-form {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-spacer"></div>
+      <h1>予定管理</h1>
+      <button class="reset-btn" id="resetBtn">リセット</button>
+    </header>
+    <div class="main-container">
+      <div class="chat-section">
+        <div class="messages" id="messages"></div>
+        <form class="input-form" id="inputForm">
+          <input type="text" id="inputField" placeholder="予定を入力..." autocomplete="off">
+          <button type="submit">送信</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 状態管理
+    let schedules = JSON.parse(localStorage.getItem('schedules') || '[]');
+    let pendingAction = null; // { type: 'add'|'modify'|'delete', ... }
+
+    // DOM要素
+    const messagesEl = document.getElementById('messages');
+    const inputForm = document.getElementById('inputForm');
+    const inputField = document.getElementById('inputField');
+
+    // ============================================
+    // 日付・時間パーサー（部品として使用）
+    // ============================================
+    function parseDateFromText(input) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let date = null;
+      let consumed = '';
+
+      const weekdayMap = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
+
+      // 今月末 / 来月末 / 再来月末
+      const monthEndMatch = input.match(/(今月|来月|再来月)末/);
+      if (monthEndMatch && !date) {
+        date = new Date(today);
+        if (monthEndMatch[1] === '来月') date.setMonth(date.getMonth() + 1);
+        else if (monthEndMatch[1] === '再来月') date.setMonth(date.getMonth() + 2);
+        date = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        consumed = monthEndMatch[0];
+      }
+
+      // 今月頭 / 来月頭
+      const monthStartMatch = input.match(/(今月|来月|再来月)(頭|初め?|あたま|はじめ)/);
+      if (monthStartMatch && !date) {
+        date = new Date(today);
+        if (monthStartMatch[1] === '今月' && today.getDate() > 5) date.setMonth(date.getMonth() + 1);
+        else if (monthStartMatch[1] === '来月') date.setMonth(date.getMonth() + 1);
+        else if (monthStartMatch[1] === '再来月') date.setMonth(date.getMonth() + 2);
+        date.setDate(1);
+        consumed = monthStartMatch[0];
+      }
+
+      // 来週/今週/再来週 + 曜日
+      const weekMatch = input.match(/(来週|今週|再来週)の?([日月火水木金土])曜?日?/);
+      if (weekMatch && !date) {
+        const weekOffset = weekMatch[1] === '来週' ? 1 : weekMatch[1] === '再来週' ? 2 : 0;
+        const targetDay = weekdayMap[weekMatch[2]];
+        date = new Date(today);
+        let daysToAdd = targetDay - date.getDay();
+        if (daysToAdd <= 0 && weekOffset === 0) daysToAdd += 7;
+        date.setDate(date.getDate() + daysToAdd + weekOffset * 7);
+        consumed = weekMatch[0];
+      }
+
+      // 今度の + 曜日
+      const nextWeekdayMatch = input.match(/今度の?([日月火水木金土])曜?日?/);
+      if (nextWeekdayMatch && !date) {
+        const targetDay = weekdayMap[nextWeekdayMatch[1]];
+        date = new Date(today);
+        let daysToAdd = targetDay - date.getDay();
+        if (daysToAdd <= 0) daysToAdd += 7;
+        date.setDate(date.getDate() + daysToAdd);
+        consumed = nextWeekdayMatch[0];
+      }
+
+      // 明日/明後日/あさって/しあさって/今日
+      const dayPatterns = [
+        { regex: /しあさって/, days: 3 },
+        { regex: /(明後日|あさって)/, days: 2 },
+        { regex: /明日/, days: 1 },
+        { regex: /今日/, days: 0 },
+      ];
+      for (const { regex, days } of dayPatterns) {
+        const match = input.match(regex);
+        if (match && !date) {
+          date = new Date(today);
+          date.setDate(date.getDate() + days);
+          consumed = match[0];
+          break;
+        }
+      }
+
+      // X日後 / X週間後
+      const daysLaterMatch = input.match(/(\d+)日後/);
+      if (daysLaterMatch && !date) {
+        date = new Date(today);
+        date.setDate(date.getDate() + parseInt(daysLaterMatch[1]));
+        consumed = daysLaterMatch[0];
+      }
+
+      const weeksLaterMatch = input.match(/(\d+)週間?後/);
+      if (weeksLaterMatch && !date) {
+        date = new Date(today);
+        date.setDate(date.getDate() + parseInt(weeksLaterMatch[1]) * 7);
+        consumed = weeksLaterMatch[0];
+      }
+
+      // M月D日 または M/D
+      const dateMatch = input.match(/(\d{1,2})[\/月](\d{1,2})日?/);
+      if (dateMatch && !date) {
+        date = new Date(today.getFullYear(), parseInt(dateMatch[1]) - 1, parseInt(dateMatch[2]));
+        if (date < today) date.setFullYear(date.getFullYear() + 1);
+        consumed = dateMatch[0];
+      }
+
+      return date ? { date, consumed } : null;
+    }
+
+    function parseTimeFromText(input) {
+      let time = null;
+      let consumed = '';
+
+      const timePatterns = [
+        { regex: /(\d{1,2})[時:](\d{2})分?/, handler: (m) => ({ h: parseInt(m[1]), m: parseInt(m[2]) }) },
+        { regex: /(\d{1,2})時半/, handler: (m) => ({ h: parseInt(m[1]), m: 30 }) },
+        { regex: /(\d{1,2})時/, handler: (m) => ({ h: parseInt(m[1]), m: 0 }) },
+        { regex: /(?<![\/\d])(\d{3,4})(?!\d|日|年|月)/, handler: (m) => {
+          const t = m[1].padStart(4, '0');
+          const h = parseInt(t.slice(0, 2));
+          const min = parseInt(t.slice(2));
+          if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return { h, m: min };
+          return null;
+        }},
+      ];
+
+      for (const { regex, handler } of timePatterns) {
+        const match = input.match(regex);
+        if (match) {
+          const result = handler(match);
+          if (result) {
+            time = result;
+            consumed = match[0];
+            break;
+          }
+        }
+      }
+
+      if (!time) {
+        const vagueTimePatterns = [
+          { regex: /早朝/, hour: 6 },
+          { regex: /朝/, hour: 9 },
+          { regex: /午前中?/, hour: 10 },
+          { regex: /お昼|昼/, hour: 12 },
+          { regex: /午後/, hour: 14 },
+          { regex: /夕方|夕/, hour: 17 },
+          { regex: /夜|晩|夜間/, hour: 19 },
+          { regex: /深夜/, hour: 23 },
+        ];
+        for (const { regex, hour } of vagueTimePatterns) {
+          const match = input.match(regex);
+          if (match) {
+            time = { h: hour, m: 0 };
+            consumed = match[0];
+            break;
+          }
+        }
+      }
+
+      return time ? { time, consumed } : null;
+    }
+
+    function formatTime(time) {
+      return time ? `${String(time.h).padStart(2, '0')}${String(time.m).padStart(2, '0')}` : null;
+    }
+
+    // ============================================
+    // 予定追加パーサー
+    // ============================================
+    function parseScheduleInput(input) {
+      let title = input;
+
+      const dateResult = parseDateFromText(input);
+      if (!dateResult) return null;
+
+      title = title.replace(dateResult.consumed, '').trim();
+
+      const timeResult = parseTimeFromText(title);
+      if (timeResult) {
+        title = title.replace(timeResult.consumed, '').trim();
+      }
+
+      // タイトルのクリーンアップ
+      title = title
+        .replace(/^[、,のにはへと]\s*/, '')
+        .replace(/\s*[、,のにはへと]$/, '')
+        .replace(/[、,]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      return {
+        date: `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`,
+        time: timeResult ? formatTime(timeResult.time) : null,
+        title: title || '予定',
+        fullDate: dateResult.date.toISOString(),
+        isOther: false
+      };
+    }
+
+    // ============================================
+    // 複数予定パーサー
+    // ============================================
+    // 日付パターンの正規表現（分割用）
+    const datePatternRegex = /(\d{1,2}[\/月]\d{1,2}日?|(?:今日|明日|明後日|あさって|しあさって)|(?:来週|今週|再来週)の?[日月火水木金土]曜?日?|今度の?[日月火水木金土]曜?日?|\d+日後|\d+週間?後|(?:今月|来月|再来月)(?:末|頭|初め?|あたま|はじめ))/g;
+
+    function parseMultipleSchedules(input) {
+      // 日付パターンの位置を検出
+      const dateMatches = [...input.matchAll(datePatternRegex)].map(m => ({
+        index: m.index,
+        type: 'date',
+        match: m[0]
+      }));
+
+      // 時間パターン（空白後の4桁数字）を検出
+      const timeMatches = [];
+      const timeRegex = /\s(\d{4})(?=\s|$|\D)/g;
+      let match;
+      while ((match = timeRegex.exec(input)) !== null) {
+        const timeIndex = match.index + 1; // 空白の次の位置
+        const timeStr = match[1];
+        // 有効な時間かチェック（00-23時、00-59分）
+        const h = parseInt(timeStr.slice(0, 2));
+        const m = parseInt(timeStr.slice(2));
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          timeMatches.push({ index: timeIndex, type: 'time', match: timeStr });
+        }
+      }
+
+      // 日付の直後の時間は除外（それは日付に付随する時間）
+      const filteredTimeMatches = timeMatches.filter(tm => {
+        return !dateMatches.some(dm => {
+          const dmEnd = dm.index + dm.match.length;
+          // 日付の直後（空白1つ分）なら除外
+          return tm.index > dmEnd && tm.index <= dmEnd + 2;
+        });
+      });
+
+      // 全ての区切りをマージしてソート
+      const allMatches = [...dateMatches, ...filteredTimeMatches].sort((a, b) => a.index - b.index);
+
+      if (allMatches.length <= 1) {
+        return null;
+      }
+
+      // 各区切り位置で入力を分割
+      const segments = [];
+      for (let i = 0; i < allMatches.length; i++) {
+        const start = allMatches[i].index;
+        const end = i < allMatches.length - 1 ? allMatches[i + 1].index : input.length;
+        const segment = input.slice(start, end).trim();
+        const hasDate = allMatches[i].type === 'date';
+        if (segment) {
+          segments.push({ text: segment, hasDate });
+        }
+      }
+
+      // 各セグメントをパース（日付がない場合は直前から引き継ぐ）
+      const parsed = [];
+      let lastDate = null;
+      let lastFullDate = null;
+
+      for (const seg of segments) {
+        if (seg.hasDate) {
+          const schedule = parseScheduleInput(seg.text);
+          if (schedule) {
+            parsed.push(schedule);
+            lastDate = schedule.date;
+            lastFullDate = schedule.fullDate;
+          }
+        } else if (lastDate) {
+          // 日付なし（時間から始まる）→直前の日付を引き継ぐ
+          const timeResult = parseTimeFromText(seg.text);
+          if (timeResult) {
+            let title = seg.text.replace(timeResult.consumed, '').trim();
+            title = title.replace(/^[、,のにはへと]\s*/, '').replace(/\s*[、,のにはへと]$/, '').trim();
+            parsed.push({
+              date: lastDate,
+              time: formatTime(timeResult.time),
+              title: title || '予定',
+              fullDate: lastFullDate,
+              isOther: false
+            });
+          }
+        }
+      }
+
+      return parsed.length > 1 ? parsed : null;
+    }
+
+    // ============================================
+    // 予定検索
+    // ============================================
+    function findSchedule(dateStr, timeStr, keyword) {
+      // 日付・時間・キーワードで予定を検索
+      const matches = schedules.filter(s => {
+        const dateMatch = !dateStr || s.date === dateStr;
+        const timeMatch = !timeStr || s.time === timeStr;
+        const keywordMatch = !keyword || s.title.includes(keyword);
+        return dateMatch && timeMatch && keywordMatch;
+      });
+      return matches;
+    }
+
+    // ============================================
+    // 変更・削除リクエストのパーサー
+    // ============================================
+    function parseModificationRequest(input) {
+      // 変更パターン1: 「〜を〜に変更」「〜を〜にして」「〜を〜に修正」
+      const modifyMatch1 = input.match(/(.+?)[をの](.+?)[にへ](変更|して|する|移動|変えて|修正|直して|訂正)/);
+      if (modifyMatch1) {
+        const target = modifyMatch1[1];
+        const newValue = modifyMatch1[2];
+        return parseTargetAndAction(target, 'modify', newValue);
+      }
+
+      // 変更パターン2: 「〜 日付 時間に変更」「〜 時間に変更」「〜 日付に変更」
+      // 区切り文字: スペース、「は」「を」「、」
+      const modifyEndMatch = input.match(/[にへ](変更|変えて|移動|して|修正|直して|訂正)$/);
+      if (modifyEndMatch) {
+        const beforeEnd = input.slice(0, modifyEndMatch.index).trim();
+
+        // 区切り文字パターン: スペース、は、を、、
+        const sep = '[\\s　はを、]+';
+
+        // パターン1: 日付+時間（例: 2/15 18時、2/15 1800）
+        const dateTimeRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}\\/\\d{1,2}[\\s　]+(?:\\d{1,2}時半?|\\d{3,4}))$`);
+        const dateTimeMatch = beforeEnd.match(dateTimeRegex);
+        if (dateTimeMatch) {
+          const targetPart = dateTimeMatch[1].trim();
+          const newValuePart = dateTimeMatch[2].trim();
+          return parseTargetAndAction(targetPart, 'modify', newValuePart);
+        }
+
+        // パターン2: 時間のみ（例: 18時、1800）
+        const timeRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}時半?|\\d{3,4})$`);
+        const timeExprMatch = beforeEnd.match(timeRegex);
+        if (timeExprMatch) {
+          const targetPart = timeExprMatch[1].trim();
+          const newValuePart = timeExprMatch[2].trim();
+          const hasTime = parseTimeFromText(newValuePart);
+          if (hasTime) {
+            return parseTargetAndAction(targetPart, 'modify', newValuePart);
+          }
+        }
+
+        // パターン3: 日付のみ（例: 2/15）
+        const dateRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}\\/\\d{1,2})$`);
+        const dateExprMatch = beforeEnd.match(dateRegex);
+        if (dateExprMatch) {
+          const targetPart = dateExprMatch[1].trim();
+          const newValuePart = dateExprMatch[2].trim();
+          const hasDate = parseDateFromText(newValuePart);
+          if (hasDate) {
+            return parseTargetAndAction(targetPart, 'modify', newValuePart);
+          }
+        }
+      }
+
+      // 削除パターン: 末尾に削除キーワードがある場合
+      const deleteKeywords = /(を?削除|を?消して|を?消す|なくなった|無くなった|キャンセル|取り?消し|中止|やめ(た|る)?|間違い(だった)?)$/;
+      const deleteMatch = input.match(deleteKeywords);
+      if (deleteMatch) {
+        const target = input.replace(deleteKeywords, '').trim();
+        return parseTargetAndAction(target, 'delete', null);
+      }
+
+      return null;
+    }
+
+    function parseTargetAndAction(targetStr, action, newValueStr) {
+      // 対象から日付・時間・キーワードを抽出
+      let targetDate = null;
+      let targetTime = null;
+      let keyword = targetStr;
+
+      const dateResult = parseDateFromText(targetStr);
+      if (dateResult) {
+        targetDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
+        keyword = targetStr.replace(dateResult.consumed, '').trim();
+      }
+
+      // 時間もパース
+      const timeResult = parseTimeFromText(keyword);
+      if (timeResult) {
+        targetTime = formatTime(timeResult.time);
+        keyword = keyword.replace(timeResult.consumed, '').trim();
+      }
+
+      // 「の予定」「の」などを除去
+      keyword = keyword.replace(/の?予定$/, '').replace(/^の/, '').trim();
+
+      // 完全一致を優先して検索
+      let target = null;
+
+      // 1. 日付・時間・タイトル全て指定されている場合、完全一致を探す
+      if (targetDate && targetTime && keyword) {
+        const exactMatch = schedules.find(s =>
+          s.date === targetDate && s.time === targetTime && s.title === keyword
+        );
+        if (exactMatch) {
+          target = exactMatch;
+        }
+      }
+
+      // 2. 完全一致がなければ部分一致で検索
+      if (!target) {
+        const matches = findSchedule(targetDate, targetTime, keyword);
+
+        if (matches.length === 0) {
+          return { error: '該当する予定が見つかりませんでした。' };
+        }
+        if (matches.length > 1) {
+          return { error: `複数の予定が見つかりました。もう少し具体的に指定してください。\n${matches.map(s => `・${s.date} ${s.time || ''} ${s.title}`).join('\n')}` };
+        }
+        target = matches[0];
+      }
+
+      if (action === 'delete') {
+        return {
+          type: 'delete',
+          target
+        };
+      }
+
+      // 変更の場合、新しい値をパース
+      if (action === 'modify') {
+        let newDate = target.date;
+        let newTime = target.time;
+        let newFullDate = target.fullDate;
+
+        const newDateResult = parseDateFromText(newValueStr);
+        if (newDateResult) {
+          newDate = `${newDateResult.date.getMonth() + 1}/${newDateResult.date.getDate()}`;
+          newFullDate = newDateResult.date.toISOString();
+        }
+
+        const newTimeResult = parseTimeFromText(newValueStr);
+        if (newTimeResult) {
+          newTime = formatTime(newTimeResult.time);
+        }
+
+        return {
+          type: 'modify',
+          target,
+          newSchedule: {
+            ...target,
+            date: newDate,
+            time: newTime,
+            fullDate: newFullDate
+          }
+        };
+      }
+
+      return null;
+    }
+
+    // ============================================
+    // UI関数
+    // ============================================
+    function addMessage(type, text, buttonType = null) {
+      const div = document.createElement('div');
+      div.className = `message ${type}`;
+      div.innerHTML = text;
+
+      if (buttonType === 'confirm') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.innerHTML = `
+          <button class="btn-ok" onclick="handleConfirm()">OK</button>
+          <button class="btn-cancel" onclick="handleCancel()">キャンセル</button>
+        `;
+        div.appendChild(btns);
+      } else if (buttonType === 'duplicate') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.innerHTML = `
+          <button class="btn-skip" onclick="handleDuplicateSkip()">同じ予定（追加しない）</button>
+          <button class="btn-add" onclick="handleDuplicateAdd()">別の予定（追加する）</button>
+        `;
+        div.appendChild(btns);
+      } else if (buttonType === 'warning') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.innerHTML = `
+          <button class="btn-add" onclick="handleWarningAdd()">追加する</button>
+          <button class="btn-cancel" onclick="handleWarningCancel()">やめる</button>
+        `;
+        div.appendChild(btns);
+      } else if (buttonType === 'modify-warning') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.innerHTML = `
+          <button class="btn-add" onclick="handleModifyWarningConfirm()">変更する</button>
+          <button class="btn-cancel" onclick="handleModifyWarningCancel()">やめる</button>
+        `;
+        div.appendChild(btns);
+      } else if (buttonType && buttonType.type === 'conflict-choice') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.style.flexWrap = 'wrap';
+        buttonType.choices.forEach((choice, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'btn-add';
+          btn.textContent = choice;
+          btn.onclick = () => handleConflictChoice(idx);
+          btns.appendChild(btn);
+        });
+        const bothBtn = document.createElement('button');
+        bothBtn.className = 'btn-skip';
+        bothBtn.textContent = '両方残す';
+        bothBtn.onclick = () => handleConflictChoice(-1);
+        btns.appendChild(bothBtn);
+        div.appendChild(btns);
+      } else if (buttonType && buttonType.type === 'exact-duplicate') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        const mergeBtn = document.createElement('button');
+        mergeBtn.className = 'btn-add';
+        mergeBtn.textContent = '1件にまとめる';
+        mergeBtn.onclick = () => handleConflictChoice(0);
+        btns.appendChild(mergeBtn);
+        const keepBtn = document.createElement('button');
+        keepBtn.className = 'btn-skip';
+        keepBtn.textContent = `${buttonType.count}件とも残す`;
+        keepBtn.onclick = () => handleConflictChoice(-1);
+        btns.appendChild(keepBtn);
+        div.appendChild(btns);
+      } else if (buttonType && buttonType.type === 'double-booking') {
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.style.flexWrap = 'wrap';
+        buttonType.schedules.forEach((s, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'btn-add';
+          btn.textContent = `${s.title}を他人の予定にする`;
+          btn.onclick = () => handleDoubleBookingResolve(idx);
+          btns.appendChild(btn);
+        });
+        const keepBtn = document.createElement('button');
+        keepBtn.className = 'btn-skip';
+        keepBtn.textContent = 'このまま';
+        keepBtn.onclick = () => handleDoubleBookingResolve(-1);
+        btns.appendChild(keepBtn);
+        div.appendChild(btns);
+      }
+
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // 重複チェック（excludeで指定した予定は除外）
+    function isDuplicate(schedule, exclude = null) {
+      return schedules.some(s =>
+        s !== exclude &&
+        s.date === schedule.date &&
+        s.time === schedule.time &&
+        s.title === schedule.title
+      );
+    }
+
+    // ダブルブッキングチェック（2時間以内の予定を検出、excludeで指定した予定は除外）
+    function findNearbySchedule(schedule, exclude = null) {
+      if (!schedule.time || schedule.isOther) return null;
+
+      const newTime = parseInt(schedule.time.slice(0, 2)) * 60 + parseInt(schedule.time.slice(2));
+
+      for (const s of schedules) {
+        // 除外指定された予定はスキップ
+        if (s === exclude) continue;
+        // 同じ日、時間あり、自分の予定（isOther: false）のみ
+        if (s.date === schedule.date && s.time && !s.isOther) {
+          const existingTime = parseInt(s.time.slice(0, 2)) * 60 + parseInt(s.time.slice(2));
+          const diff = Math.abs(newTime - existingTime);
+          if (diff > 0 && diff <= 120) { // 2時間以内（同一時刻は除く）
+            return s;
+          }
+        }
+      }
+      return null;
+    }
+
+    // 同じ日時に既存の自分の予定があるかチェック（変更時用）
+    function findSameTimeSchedules(schedule, exclude = null) {
+      if (!schedule.time) return [];
+
+      return schedules.filter(s =>
+        s !== exclude &&
+        !s.isOther &&
+        s.date === schedule.date &&
+        s.time === schedule.time
+      );
+    }
+
+    // 同じ日時に自分の予定が複数ある場合を検出（起動時チェック用）
+    function findDoubleBookings() {
+      const groups = {};
+      schedules.forEach(s => {
+        if (!s.isOther && s.time) {
+          const key = `${s.date}_${s.time}`;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(s);
+        }
+      });
+
+      // 2件以上ある日時を返す
+      const conflicts = [];
+      Object.keys(groups).forEach(key => {
+        if (groups[key].length >= 2) {
+          conflicts.push({
+            date: groups[key][0].date,
+            time: groups[key][0].time,
+            schedules: groups[key]
+          });
+        }
+      });
+      return conflicts;
+    }
+
+    // 一括入力時の同一日時の予定を検出（完全重複とダブルブッキング両方）
+    function findSameTimeConflicts(schedulesArray) {
+      const groups = {};
+      schedulesArray.forEach((s, idx) => {
+        if (s.time && !s.isOther) {
+          const key = `${s.date}_${s.time}`;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push({ schedule: s, index: idx });
+        }
+      });
+
+      const conflicts = [];
+      Object.entries(groups).forEach(([key, items]) => {
+        if (items.length <= 1) return;
+
+        // 同じタイトルのグループを検出（完全重複）
+        const titleGroups = {};
+        items.forEach(item => {
+          const title = item.schedule.title;
+          if (!titleGroups[title]) titleGroups[title] = [];
+          titleGroups[title].push(item);
+        });
+
+        // 完全重複（同じタイトルが2件以上）
+        Object.entries(titleGroups).forEach(([title, titleItems]) => {
+          if (titleItems.length > 1) {
+            conflicts.push({
+              key,
+              items: titleItems,
+              type: 'exact-duplicate',
+              title
+            });
+          }
+        });
+
+        // ダブルブッキング（異なるタイトルが同じ日時）
+        const uniqueTitles = Object.keys(titleGroups);
+        if (uniqueTitles.length > 1) {
+          // 各タイトルから1件ずつ取得
+          const representativeItems = uniqueTitles.map(title => titleGroups[title][0]);
+          conflicts.push({
+            key,
+            items: representativeItems,
+            type: 'double-booking'
+          });
+        }
+      });
+
+      return conflicts;
+    }
+
+    function formatScheduleDisplay(s) {
+      const timeStr = s.time ? ` ${s.time}` : '';
+      if (s.isOther) {
+        return `(${s.date}${timeStr} ${s.title})`;
+      }
+      return `${s.date}${timeStr} ${s.title}`;
+    }
+
+    function formatScheduleList() {
+      if (schedules.length === 0) {
+        return '予定はありません';
+      }
+
+      const sorted = [...schedules].sort((a, b) => {
+        const dateA = new Date(a.fullDate);
+        const dateB = new Date(b.fullDate);
+        if (dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+        return (a.time || '0000') > (b.time || '0000') ? 1 : -1;
+      });
+
+      const grouped = {};
+      sorted.forEach(s => {
+        if (!grouped[s.date]) grouped[s.date] = [];
+        grouped[s.date].push(s);
+      });
+
+      let lines = ['予定！'];
+      Object.keys(grouped).forEach(date => {
+        grouped[date].forEach((s, idx) => {
+          const timeStr = s.time ? `${s.time} ` : '';
+          const content = s.isOther ? `(${timeStr}${s.title})` : `${timeStr}${s.title}`;
+          if (idx === 0) {
+            lines.push(`${date} ${content}`);
+          } else {
+            lines.push(`      ${content}`);
+          }
+        });
+      });
+
+      return lines.join('\n');
+    }
+
+    function showScheduleList() {
+      const text = formatScheduleList();
+      addMessage('system', `<div class="schedule-text">${text}</div>`);
+    }
+
+    function setInputEnabled(enabled) {
+      inputField.disabled = !enabled;
+      document.querySelector('.input-form button').disabled = !enabled;
+    }
+
+    // ============================================
+    // 確認処理
+    // ============================================
+    function handleConfirm() {
+      if (!pendingAction) return;
+
+      if (pendingAction.type === 'add') {
+        schedules.push(pendingAction.schedule);
+      } else if (pendingAction.type === 'add-multiple') {
+        schedules.push(...pendingAction.schedules);
+      } else if (pendingAction.type === 'delete') {
+        schedules = schedules.filter(s => s !== pendingAction.target);
+      } else if (pendingAction.type === 'modify') {
+        // 重複チェック（変更対象自身は除外）
+        if (isDuplicate(pendingAction.newSchedule, pendingAction.target)) {
+          addMessage('system', 'この時間に既に同じ予定があります。');
+          pendingAction = null;
+          setInputEnabled(true);
+          return;
+        }
+
+        // 同じ日時に既存の予定があるかチェック（変更対象自身は除外）
+        const sameTimeSchedules = findSameTimeSchedules(pendingAction.newSchedule, pendingAction.target);
+        if (sameTimeSchedules.length > 0) {
+          const titles = sameTimeSchedules.map(s => s.title).join('、');
+          const confirmText = `${formatScheduleDisplay(pendingAction.target)} → ${formatScheduleDisplay(pendingAction.newSchedule)} に変更しますか？<br><span style="color:#e74c3c">⚠ ${pendingAction.newSchedule.date} ${pendingAction.newSchedule.time} に既に予定があります（${titles}）</span>`;
+          addMessage('confirm', confirmText, 'modify-warning');
+          return;
+        }
+
+        // 2時間以内の予定チェック（変更対象自身は除外）
+        const nearby = findNearbySchedule(pendingAction.newSchedule, pendingAction.target);
+        if (nearby) {
+          const confirmText = `${formatScheduleDisplay(pendingAction.target)} → ${formatScheduleDisplay(pendingAction.newSchedule)} に変更しますか？<br><span style="color:#e74c3c">⚠ ${formatScheduleDisplay(nearby)} の2時間以内に予定があります</span>`;
+          addMessage('confirm', confirmText, 'modify-warning');
+          return;
+        }
+
+        const idx = schedules.indexOf(pendingAction.target);
+        if (idx !== -1) {
+          schedules[idx] = pendingAction.newSchedule;
+        }
+      }
+
+      localStorage.setItem('schedules', JSON.stringify(schedules));
+      showScheduleList();
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleCancel() {
+      addMessage('system', 'キャンセルしました。');
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleDuplicateSkip() {
+      addMessage('system', '追加しませんでした。');
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleDuplicateAdd() {
+      if (pendingAction && pendingAction.schedule) {
+        schedules.push(pendingAction.schedule);
+        localStorage.setItem('schedules', JSON.stringify(schedules));
+        showScheduleList();
+      }
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleWarningAdd() {
+      if (pendingAction && pendingAction.schedule) {
+        schedules.push(pendingAction.schedule);
+        localStorage.setItem('schedules', JSON.stringify(schedules));
+        showScheduleList();
+      }
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleWarningCancel() {
+      addMessage('system', '追加しませんでした。');
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleModifyWarningConfirm() {
+      if (pendingAction && pendingAction.target && pendingAction.newSchedule) {
+        const idx = schedules.indexOf(pendingAction.target);
+        if (idx !== -1) {
+          schedules[idx] = pendingAction.newSchedule;
+        }
+        localStorage.setItem('schedules', JSON.stringify(schedules));
+        showScheduleList();
+      }
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleModifyWarningCancel() {
+      addMessage('system', '変更しませんでした。');
+      pendingAction = null;
+      setInputEnabled(true);
+    }
+
+    function handleDoubleBookingResolve(idx) {
+      if (!pendingAction || pendingAction.type !== 'resolve-double-booking') return;
+
+      if (idx >= 0) {
+        // 選択された予定を他人の予定に変換
+        const targetSchedule = pendingAction.currentConflict.schedules[idx];
+        const scheduleIdx = schedules.indexOf(targetSchedule);
+        if (scheduleIdx !== -1) {
+          schedules[scheduleIdx].isOther = true;
+          localStorage.setItem('schedules', JSON.stringify(schedules));
+          addMessage('system', `${targetSchedule.title} を他人の予定に変更しました。`);
+        }
+      }
+
+      // 次のダブルブッキングをチェック
+      pendingAction.conflictIndex++;
+      if (pendingAction.conflictIndex < pendingAction.conflicts.length) {
+        showNextDoubleBooking();
+      } else {
+        pendingAction = null;
+        setInputEnabled(true);
+        showScheduleList();
+      }
+    }
+
+    function showNextDoubleBooking() {
+      const conflict = pendingAction.conflicts[pendingAction.conflictIndex];
+      pendingAction.currentConflict = conflict;
+      const confirmText = `${conflict.date} ${conflict.time} に予定が重なっています`;
+      addMessage('confirm', confirmText, { type: 'double-booking', schedules: conflict.schedules });
+    }
+
+    function handleConflictChoice(choiceIdx) {
+      if (!pendingAction || pendingAction.type !== 'resolve-conflict') return;
+
+      const conflict = pendingAction.currentConflict;
+      if (choiceIdx === -1) {
+        // 両方残す - 何もしない
+      } else {
+        // 選択されたもの以外を除外
+        const keepIndex = conflict.items[choiceIdx].index;
+        conflict.items.forEach(item => {
+          if (item.index !== keepIndex) {
+            pendingAction.schedulesToRemove.add(item.index);
+          }
+        });
+      }
+
+      // 次の衝突をチェック
+      processNextConflict();
+    }
+
+    function processNextConflict() {
+      const { allSchedules, conflicts, schedulesToRemove } = pendingAction;
+
+      if (conflicts.length === 0) {
+        // 全ての衝突を解決 → 最終確認
+        const finalSchedules = allSchedules.filter((_, idx) => !schedulesToRemove.has(idx));
+
+        if (finalSchedules.length === 0) {
+          addMessage('system', '追加する予定がありません。');
+          pendingAction = null;
+          setInputEnabled(true);
+          return;
+        }
+
+        const listText = finalSchedules.map(s => formatScheduleDisplay(s)).join('<br>');
+        const confirmText = `${finalSchedules.length}件の予定を追加しますか？<br>${listText}`;
+        addMessage('confirm', confirmText, 'confirm');
+        pendingAction = { type: 'add-multiple', schedules: finalSchedules };
+        return;
+      }
+
+      // 次の衝突を処理
+      const nextConflict = conflicts.shift();
+      // 既に除外されたものを除く
+      nextConflict.items = nextConflict.items.filter(item => !schedulesToRemove.has(item.index));
+
+      if (nextConflict.items.length <= 1) {
+        // 衝突が解消された
+        processNextConflict();
+        return;
+      }
+
+      pendingAction.currentConflict = nextConflict;
+
+      const [date, time] = nextConflict.key.split('_');
+
+      if (nextConflict.type === 'exact-duplicate') {
+        // 完全重複
+        const confirmText = `${date} ${time} に同じ予定が${nextConflict.items.length}件あります：${nextConflict.title}`;
+        addMessage('confirm', confirmText, { type: 'exact-duplicate', count: nextConflict.items.length });
+      } else {
+        // ダブルブッキング
+        const choices = nextConflict.items.map(item => item.schedule.title);
+        const confirmText = `${date} ${time} に${nextConflict.items.length}件の予定があります。どちらを残しますか？`;
+        addMessage('confirm', confirmText, { type: 'conflict-choice', choices });
+      }
+    }
+
+    // ============================================
+    // フォーム送信
+    // ============================================
+    inputForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = inputField.value.trim();
+      if (!input) return;
+
+      addMessage('user', input);
+      inputField.value = '';
+
+      // 予定確認パターンをチェック
+      if (/予定|一覧|スケジュール|今どうなってる/.test(input) && !/を|に変更|削除|キャンセル|なくなった|間違い/.test(input)) {
+        showScheduleList();
+        return;
+      }
+
+      // まず変更・削除リクエストかチェック
+      const modRequest = parseModificationRequest(input);
+      if (modRequest) {
+        if (modRequest.error) {
+          addMessage('system', modRequest.error);
+          return;
+        }
+
+        if (modRequest.type === 'delete') {
+          const confirmText = `${formatScheduleDisplay(modRequest.target)} を削除しますか？`;
+          addMessage('confirm', confirmText, 'confirm');
+          pendingAction = modRequest;
+          setInputEnabled(false);
+          return;
+        }
+
+        if (modRequest.type === 'modify') {
+          // 重複チェック（変更対象自身は除外）
+          if (isDuplicate(modRequest.newSchedule, modRequest.target)) {
+            addMessage('system', 'この時間に既に同じ予定があります。');
+            return;
+          }
+
+          // ダブルブッキングチェック（変更対象自身は除外）
+          const nearby = findNearbySchedule(modRequest.newSchedule, modRequest.target);
+          if (nearby) {
+            const confirmText = `${formatScheduleDisplay(modRequest.target)} → ${formatScheduleDisplay(modRequest.newSchedule)} に変更しますか？<br><span style="color:#e74c3c">⚠ ${formatScheduleDisplay(nearby)} の2時間以内に予定があります</span>`;
+            addMessage('confirm', confirmText, 'modify-warning');
+            pendingAction = modRequest;
+            setInputEnabled(false);
+            return;
+          }
+
+          const confirmText = `${formatScheduleDisplay(modRequest.target)} → ${formatScheduleDisplay(modRequest.newSchedule)} に変更しますか？`;
+          addMessage('confirm', confirmText, 'confirm');
+          pendingAction = modRequest;
+          setInputEnabled(false);
+          return;
+        }
+      }
+
+      // 新規追加
+      const isOther = input.startsWith('(') || input.startsWith('（');
+      const cleanInput = input.replace(/^[（(]|[)）]$/g, '');
+
+      // 複数予定かチェック
+      const multipleSchedules = parseMultipleSchedules(cleanInput);
+      if (multipleSchedules) {
+        multipleSchedules.forEach(s => s.isOther = isOther);
+        const originalCount = multipleSchedules.length;
+
+        // 既存予定との重複のみ自動除外（入力内の重複は選択式で確認）
+        const uniqueSchedules = [];
+        let existingDupCount = 0;
+        for (const s of multipleSchedules) {
+          const isDupInExisting = isDuplicate(s);
+          if (!isDupInExisting) {
+            uniqueSchedules.push(s);
+          } else {
+            existingDupCount++;
+          }
+        }
+
+        if (uniqueSchedules.length === 0) {
+          addMessage('system', `${originalCount}件全て既に登録済みです。`);
+          return;
+        }
+
+        // 既存予定との重複除外メッセージ
+        if (existingDupCount > 0) {
+          addMessage('system', `${existingDupCount}件は既に登録済みのため除外しました。`);
+        }
+
+        // 完全重複とダブルブッキングをチェック（同一日時の予定）
+        const conflicts = findSameTimeConflicts(uniqueSchedules);
+
+        if (conflicts.length > 0) {
+          // 衝突解決モードへ
+          pendingAction = {
+            type: 'resolve-conflict',
+            allSchedules: uniqueSchedules,
+            conflicts: conflicts,
+            schedulesToRemove: new Set(),
+            currentConflict: null
+          };
+          setInputEnabled(false);
+          processNextConflict();
+          return;
+        }
+
+        // 衝突なし → 最終確認
+        const listText = uniqueSchedules.map(s => formatScheduleDisplay(s)).join('<br>');
+        const confirmText = `${uniqueSchedules.length}件の予定を追加しますか？<br>${listText}`;
+        addMessage('confirm', confirmText, 'confirm');
+        pendingAction = { type: 'add-multiple', schedules: uniqueSchedules };
+        setInputEnabled(false);
+        return;
+      }
+
+      // 単一予定
+      const parsed = parseScheduleInput(cleanInput);
+      if (parsed) {
+        parsed.isOther = isOther;
+
+        // 重複チェック
+        if (isDuplicate(parsed)) {
+          const confirmText = `${formatScheduleDisplay(parsed)} は既に登録されています。`;
+          addMessage('confirm', confirmText, 'duplicate');
+          pendingAction = { type: 'duplicate', schedule: parsed };
+          setInputEnabled(false);
+        } else {
+          // ダブルブッキングチェック（自分の予定のみ）
+          const nearby = findNearbySchedule(parsed);
+          if (nearby) {
+            const confirmText = `${formatScheduleDisplay(nearby)} の2時間以内に予定があります。追加しますか？`;
+            addMessage('confirm', confirmText, 'warning');
+            pendingAction = { type: 'warning', schedule: parsed };
+            setInputEnabled(false);
+          } else {
+            const confirmText = `${formatScheduleDisplay(parsed)} を追加しますか？`;
+            addMessage('confirm', confirmText, 'confirm');
+            pendingAction = { type: 'add', schedule: parsed };
+            setInputEnabled(false);
+          }
+        }
+      } else {
+        addMessage('system', '日付を認識できませんでした。「来週の金曜日」「明日」「1/15」「今月末」などを含めてください。');
+      }
+    });
+
+    // リセットボタン（2段階確認）
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      if (schedules.length === 0) {
+        addMessage('system', '削除する予定がありません。');
+        return;
+      }
+      if (confirm('本当に全ての予定を削除しますか？')) {
+        if (confirm('この操作は取り消せません。本当に削除しますか？')) {
+          schedules = [];
+          localStorage.setItem('schedules', JSON.stringify(schedules));
+          addMessage('system', '全ての予定を削除しました。');
+        }
+      }
+    });
+
+    // 初期化
+    function initializeApp() {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+
+      // 過去の予定を削除
+      const originalCount = schedules.length;
+      schedules = schedules.filter(s => {
+        const scheduleDate = new Date(s.fullDate);
+        const scheduleDateOnly = new Date(scheduleDate.getFullYear(), scheduleDate.getMonth(), scheduleDate.getDate());
+        return scheduleDateOnly >= today;
+      });
+
+      const removedCount = originalCount - schedules.length;
+      if (removedCount > 0) {
+        localStorage.setItem('schedules', JSON.stringify(schedules));
+      }
+
+      // 当日の予定を取得
+      const todaySchedules = schedules
+        .filter(s => s.date === todayStr)
+        .sort((a, b) => (a.time || '0000') > (b.time || '0000') ? 1 : -1);
+
+      // 今後の予定（当日以降）
+      const futureSchedules = schedules
+        .filter(s => s.date !== todayStr)
+        .sort((a, b) => {
+          const dateA = new Date(a.fullDate);
+          const dateB = new Date(b.fullDate);
+          if (dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+          return (a.time || '0000') > (b.time || '0000') ? 1 : -1;
+        });
+
+      // 挨拶メッセージ
+      let greeting = 'おはようございます！<br><br>';
+
+      // 本日の予定
+      if (todaySchedules.length > 0) {
+        greeting += '本日の予定：<br>';
+        todaySchedules.forEach((s, idx) => {
+          const timeStr = s.time ? `${s.time} ` : '';
+          const content = s.isOther ? `(${timeStr}${s.title})` : `${timeStr}${s.title}`;
+          if (idx === 0) {
+            greeting += `${s.date} ${content}<br>`;
+          } else {
+            greeting += `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}<br>`;
+          }
+        });
+      } else {
+        greeting += '本日の予定はありません。<br>';
+      }
+
+      // 今後の予定
+      if (futureSchedules.length > 0) {
+        greeting += '<br>今後の予定：<br>';
+        const grouped = {};
+        futureSchedules.forEach(s => {
+          if (!grouped[s.date]) grouped[s.date] = [];
+          grouped[s.date].push(s);
+        });
+        Object.keys(grouped).forEach(date => {
+          grouped[date].forEach((s, idx) => {
+            const timeStr = s.time ? `${s.time} ` : '';
+            const content = s.isOther ? `(${timeStr}${s.title})` : `${timeStr}${s.title}`;
+            if (idx === 0) {
+              greeting += `${date} ${content}<br>`;
+            } else {
+              greeting += `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${content}<br>`;
+            }
+          });
+        });
+      }
+
+      addMessage('system', `<div class="schedule-text">${greeting}</div>`);
+
+      // 入力例メッセージ
+      const helpText = `予定を入力してね！<br><br>` +
+        `📝 追加：1/20 1400 会議<br>` +
+        `📋 確認：予定<br>` +
+        `🗑️ 削除：1/20の会議を削除<br>` +
+        `✏️ 変更：1/20の会議を1500に変更`;
+      addMessage('system', helpText);
+
+      // ダブルブッキングチェック（同じ日時に自分の予定が複数ある場合）
+      const doubleBookings = findDoubleBookings();
+      if (doubleBookings.length > 0) {
+        pendingAction = {
+          type: 'resolve-double-booking',
+          conflicts: doubleBookings,
+          conflictIndex: 0,
+          currentConflict: null
+        };
+        setInputEnabled(false);
+        showNextDoubleBooking();
+      }
+    }
+
+    initializeApp();
+
+    // Service Worker登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .catch(err => console.error('SW registration failed:', err));
+    }
+  </script>
+</body>
+</html>

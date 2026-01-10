@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="192" height="192" rx="32" fill="url(#bg)"/>
+  <!-- Calendar body -->
+  <rect x="32" y="48" width="128" height="112" rx="12" fill="white"/>
+  <!-- Calendar header -->
+  <rect x="32" y="48" width="128" height="32" rx="12" fill="#e74c3c"/>
+  <rect x="32" y="68" width="128" height="12" fill="#e74c3c"/>
+  <!-- Calendar rings -->
+  <rect x="56" y="36" width="8" height="24" rx="4" fill="#555"/>
+  <rect x="128" y="36" width="8" height="24" rx="4" fill="#555"/>
+  <!-- Date number -->
+  <text x="96" y="130" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#333" text-anchor="middle">31</text>
+  <!-- Check mark -->
+  <circle cx="140" cy="140" r="20" fill="#27ae60"/>
+  <path d="M130 140 L137 147 L150 132" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
