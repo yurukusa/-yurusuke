@@ -647,13 +647,22 @@
           if (timeResult) {
             let title = segment.replace(timeResult.consumed, '').trim();
             title = title.replace(/^[、,のにはへと]\s*/, '').replace(/\s*[、,のにはへと]$/, '').trim();
+
+            // カッコ付きタイトルを検出（例：「(飲み会)」「（飲み会）」）
+            let isOtherSchedule = false;
+            const parenTitleMatch = title.match(/^[（(]\s*(.+?)\s*[)）]$/);
+            if (parenTitleMatch) {
+              title = parenTitleMatch[1];
+              isOtherSchedule = true;
+            }
+
             if (!isInvalidTitle(title)) {
               parsed.push({
                 date: lastDate,
                 time: formatTime(timeResult.time),
                 title: title,
                 fullDate: lastFullDate,
-                isOther: false
+                isOther: isOtherSchedule
               });
             } else {
               skipped.push(`${lastDate} ${formatTime(timeResult.time)} ${title || '(空)'}`);
