@@ -347,6 +347,29 @@
     function parseScheduleInput(input) {
       let title = input;
 
+      // カッコ付きの予定を検出（例：12/14 (0800 ドリフ)、1/17 (1000 れいな一時保育)）
+      const parenMatch = input.match(/^(.+?)\s*[（(](\d{3,4})\s+(.+?)[)）]$/);
+      if (parenMatch) {
+        const dateStr = parenMatch[1].trim();
+        const timeStr = parenMatch[2].padStart(4, '0');
+        const titleInParen = parenMatch[3].trim();
+
+        const h = parseInt(timeStr.slice(0, 2));
+        const m = parseInt(timeStr.slice(2));
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          const dateResult = parseDateFromText(dateStr);
+          if (dateResult) {
+            return {
+              date: `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`,
+              time: timeStr,
+              title: titleInParen,
+              fullDate: dateResult.date.toISOString(),
+              isOther: true
+            };
+          }
+        }
+      }
+
       // 先頭に無関係な文字がある場合、日付パターンの位置を探す
       const datePatternForSearch = /(\d{1,2}[\/月]\d{1,2}日?|(?:今日|明日|明後日|あさって|しあさって)|(?:来週|今週|再来週)の?[日月火水木金土]曜?日?|(?:今度|次)の?[日月火水木金土]曜?日?|\d+日後|\d+週間?後|(?:今月|来月|再来月)(?:末|頭|初め?|あたま|はじめ))/;
       const dateMatch = input.match(datePatternForSearch);
