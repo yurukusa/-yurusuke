@@ -41,7 +41,11 @@
       align-items: center;
     }
     header h1 { font-size: 18px; font-weight: 600; }
-    .reset-btn {
+    .header-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .header-btn {
       background: rgba(255,255,255,0.2);
       border: 1px solid rgba(255,255,255,0.4);
       color: white;
@@ -50,8 +54,98 @@
       font-size: 12px;
       cursor: pointer;
     }
-    .reset-btn:hover { background: rgba(255,255,255,0.3); }
-    .header-spacer { width: 60px; }
+    .header-btn:hover { background: rgba(255,255,255,0.3); }
+    .popup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    .popup {
+      background: white;
+      border-radius: 12px;
+      max-width: 90%;
+      max-height: 80%;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .popup-header {
+      background: #4a90d9;
+      color: white;
+      padding: 12px 16px;
+      font-weight: 600;
+      border-radius: 12px 12px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .popup-close {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .popup-content {
+      padding: 16px;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+    .popup-content h3 {
+      color: #4a90d9;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+    .popup-content h3:first-child {
+      margin-top: 0;
+    }
+    .popup-content .example {
+      color: #666;
+      margin-left: 8px;
+    }
+    .settings-item {
+      padding: 12px 0;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .settings-item:last-child {
+      border-bottom: none;
+    }
+    .settings-item.disabled {
+      color: #999;
+    }
+    .settings-item .badge {
+      background: #e0e0e0;
+      color: #666;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .delete-all-btn {
+      width: 100%;
+      padding: 12px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .delete-all-btn:hover {
+      background: #c82333;
+    }
     .main-container {
       flex: 1;
       display: flex;
@@ -161,10 +255,70 @@
 <body>
   <div class="app">
     <header>
-      <div class="header-spacer"></div>
+      <div class="header-buttons">
+        <button class="header-btn" id="helpBtn">使い方</button>
+        <button class="header-btn" id="settingsBtn">設定</button>
+      </div>
       <h1>ゆるスケ</h1>
-      <button class="reset-btn" id="resetBtn">リセット</button>
+      <div style="width: 120px;"></div>
     </header>
+
+    <!-- 使い方ポップアップ -->
+    <div class="popup-overlay" id="helpPopup" style="display: none;">
+      <div class="popup">
+        <div class="popup-header">
+          <span>使い方</span>
+          <button class="popup-close" onclick="closePopup('helpPopup')">×</button>
+        </div>
+        <div class="popup-content">
+          <h3>【予定を追加する】</h3>
+          日付と時間と内容を入力してね<br>
+          <span class="example">例：1/20 1400 会議</span><br>
+          <span class="example">例：明日 18時 飲み会</span>
+
+          <h3>【予定を確認する】</h3>
+          「予定」と入力してね
+
+          <h3>【予定を削除する】</h3>
+          日付と内容を入力して「削除」をつけてね<br>
+          <span class="example">例：1/20の会議を削除</span>
+
+          <h3>【予定を変更する】</h3>
+          <span class="example">例：1/20の会議を1500に変更</span><br>
+          <span class="example">例：1/20の会議を1/21に変更</span>
+
+          <h3>【他人の予定を追加する】</h3>
+          カッコで囲むか、最後に「他人の予定」をつけてね<br>
+          <span class="example">例：1/20 (1400 子供の習い事)</span><br>
+          <span class="example">例：1/20 1400 子供の習い事 他人の予定</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定ポップアップ -->
+    <div class="popup-overlay" id="settingsPopup" style="display: none;">
+      <div class="popup">
+        <div class="popup-header">
+          <span>設定</span>
+          <button class="popup-close" onclick="closePopup('settingsPopup')">×</button>
+        </div>
+        <div class="popup-content">
+          <div class="settings-item disabled">
+            <span>アカウント連携</span>
+            <span class="badge">準備中</span>
+          </div>
+          <div class="settings-item disabled">
+            <span>Googleカレンダー連携</span>
+            <span class="badge">準備中</span>
+          </div>
+          <div class="settings-item disabled">
+            <span>言語設定</span>
+            <span class="badge">準備中</span>
+          </div>
+          <button class="delete-all-btn" id="deleteAllBtn">全ての予定を削除</button>
+        </div>
+      </div>
+    </div>
     <div class="main-container">
       <div class="chat-section">
         <div class="messages" id="messages"></div>
@@ -1505,16 +1659,39 @@
       }
     });
 
-    // リセットボタン（2段階確認）
-    document.getElementById('resetBtn').addEventListener('click', () => {
+    // ポップアップ関数
+    function openPopup(id) {
+      document.getElementById(id).style.display = 'flex';
+    }
+
+    function closePopup(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    // ポップアップの背景クリックで閉じる
+    document.querySelectorAll('.popup-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.style.display = 'none';
+        }
+      });
+    });
+
+    // ヘッダーボタン
+    document.getElementById('helpBtn').addEventListener('click', () => openPopup('helpPopup'));
+    document.getElementById('settingsBtn').addEventListener('click', () => openPopup('settingsPopup'));
+
+    // 全て削除ボタン（2段階確認）
+    document.getElementById('deleteAllBtn').addEventListener('click', () => {
       if (schedules.length === 0) {
-        addMessage('system', '削除する予定がありません。');
+        alert('削除する予定がありません。');
         return;
       }
       if (confirm('本当に全ての予定を削除しますか？')) {
         if (confirm('この操作は取り消せません。本当に削除しますか？')) {
           schedules = [];
           localStorage.setItem('schedules', JSON.stringify(schedules));
+          closePopup('settingsPopup');
           addMessage('system', '全ての予定を削除しました。');
         }
       }
@@ -1615,14 +1792,6 @@
       }
 
       addMessage('system', `<div class="schedule-text">${greeting}</div>`);
-
-      // 入力例メッセージ
-      const helpText = `予定を入力してね！<br><br>` +
-        `📝 追加：1/20 1400 会議<br>` +
-        `📋 確認：予定<br>` +
-        `🗑️ 削除：1/20の会議を削除<br>` +
-        `✏️ 変更：1/20の会議を1500に変更`;
-      addMessage('system', helpText);
 
       // ダブルブッキングチェック（同じ日時に自分の予定が複数ある場合）
       const doubleBookings = findDoubleBookings();
