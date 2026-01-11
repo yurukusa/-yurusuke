@@ -524,26 +524,6 @@
     // 予定追加パーサー
     // ============================================
     function parseScheduleInput(input) {
-      console.log("=== parseScheduleInput ===", input);
-      console.log("入力の文字コード:", [...input].map(c => c.charCodeAt(0)));
-      console.log("入力の各文字:", [...input].map(c => `'${c}'(${c.charCodeAt(0)})`).join(' '));
-
-      // 各部分のマッチテスト
-      console.log("日付部分テスト:", input.match(/^(\d{1,2}\/\d{1,2})/));
-      console.log("時間部分テスト:", input.match(/(\d{3,4})/));
-      console.log("カッコ検出テスト:", input.match(/[（(]/), input.match(/[)）]/));
-      console.log("カッコ内テスト:", input.match(/[（(](.+?)[)）]/));
-
-      const debugMatch = input.match(/^(.+?)\s+(\d{3,4})\s*[（(](.+?)[)）]$/);
-      console.log("時間カッコ外パターンマッチ:", debugMatch);
-
-      // 正規表現を分解してテスト
-      if (!debugMatch) {
-        console.log("--- マッチ失敗の詳細分析 ---");
-        console.log("先頭から日付+空白+時間:", input.match(/^(.+?)\s+(\d{3,4})/));
-        console.log("末尾のカッコ部分:", input.match(/[（(](.+?)[)）]$/));
-      }
-
       let title = input;
 
       // カッコ付きの予定を検出（例：12/14 (0800 ドリフ)、1/17 (1000 れいな一時保育)）
@@ -565,7 +545,6 @@
               fullDate: dateResult.date.toISOString(),
               isOther: true
             };
-            console.log('[parseScheduleInput] カッコ内時間形式:', input, '→', result);
             return result;
           }
         }
@@ -590,7 +569,6 @@
               fullDate: dateResult.date.toISOString(),
               isOther: true
             };
-            console.log('[parseScheduleInput] 時間カッコ外形式:', input, '→', result);
             return result;
           }
         }
