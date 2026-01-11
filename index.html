@@ -142,6 +142,24 @@
       border-radius: 4px;
       font-size: 12px;
     }
+    .data-btn {
+      width: 100%;
+      padding: 12px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .data-btn:hover {
+      background: #0056b3;
+    }
+    .data-btn:first-of-type {
+      margin-top: 16px;
+    }
     .support-btn {
       width: 100%;
       padding: 12px;
@@ -364,6 +382,9 @@
             <span>言語設定</span>
             <span class="badge">準備中</span>
           </div>
+          <button class="data-btn" id="exportBtn">📤 予定をエクスポート</button>
+          <button class="data-btn" id="importBtn">📥 予定をインポート</button>
+          <input type="file" id="importFile" accept=".json" style="display: none;">
           <a href="https://ko-fi.com/yurukusa" target="_blank" rel="noopener noreferrer" class="support-btn">☕ 開発を応援する</a>
           <button class="delete-all-btn" id="deleteAllBtn">全ての予定を削除</button>
         </div>
@@ -1712,6 +1733,85 @@
     // ヘッダーボタン
     document.getElementById('helpBtn').addEventListener('click', () => openPopup('helpPopup'));
     document.getElementById('settingsBtn').addEventListener('click', () => openPopup('settingsPopup'));
+
+    // エクスポート機能
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      if (schedules.length === 0) {
+        alert('エクスポートする予定がありません。');
+        return;
+      }
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const data = JSON.stringify(schedules, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `yurusuke_backup_${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      closePopup('settingsPopup');
+      addMessage('system', '予定をエクスポートしました。');
+    });
+
+    // インポート機能
+    const importFile = document.getElementById('importFile');
+    document.getElementById('importBtn').addEventListener('click', () => {
+      importFile.click();
+    });
+
+    importFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const importedData = JSON.parse(event.target.result);
+          if (!Array.isArray(importedData)) {
+            alert('無効なファイル形式です。');
+            return;
+          }
+
+          // 確認ダイアログ
+          const choice = confirm('既存の予定に追加しますか？\n\nOK: 追加する\nキャンセル: 上書きする');
+
+          if (choice) {
+            // 追加モード：重複を除いて追加
+            let addedCount = 0;
+            importedData.forEach(newSchedule => {
+              const isDup = schedules.some(s =>
+                s.date === newSchedule.date &&
+                s.time === newSchedule.time &&
+                s.title === newSchedule.title
+              );
+              if (!isDup) {
+                schedules.push(newSchedule);
+                addedCount++;
+              }
+            });
+            localStorage.setItem('schedules', JSON.stringify(schedules));
+            closePopup('settingsPopup');
+            addMessage('system', `${addedCount}件の予定を追加しました。`);
+          } else {
+            // 上書きモード
+            if (confirm('既存の予定は全て削除されます。よろしいですか？')) {
+              schedules = importedData;
+              localStorage.setItem('schedules', JSON.stringify(schedules));
+              closePopup('settingsPopup');
+              addMessage('system', `${importedData.length}件の予定をインポートしました。`);
+            }
+          }
+        } catch (err) {
+          alert('ファイルの読み込みに失敗しました。');
+        }
+      };
+      reader.readAsText(file);
+      // ファイル選択をリセット
+      importFile.value = '';
+    });
 
     // 全て削除ボタン（2段階確認）
     document.getElementById('deleteAllBtn').addEventListener('click', () => {
