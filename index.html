@@ -416,7 +416,7 @@
       font-size: 12px;
       border-radius: 4px;
       cursor: default;
-      min-height: 60px;
+      min-height: 85px;
       border: 1px solid #eee;
       overflow: hidden;
       display: flex;
@@ -447,23 +447,57 @@
     .calendar-grid .day-cell.today.sunday .day-number,
     .calendar-grid .day-cell.today.saturday .day-number { color: white; }
     .calendar-grid .day-cell .schedule-item {
-      font-size: 10px;
+      font-size: 11px;
       background: #4a90d9;
       color: white;
-      padding: 2px 4px;
+      padding: 3px 5px;
       border-radius: 3px;
       margin-top: 2px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      cursor: pointer;
+      transition: transform 0.1s;
+      position: relative;
+    }
+    .calendar-grid .day-cell .schedule-item:hover {
+      transform: scale(1.02);
+      z-index: 10;
     }
     .calendar-grid .day-cell .schedule-item.other {
-      background: #9e9e9e;
+      background: #78909c;
+    }
+    .calendar-grid .day-cell .schedule-item.morning {
+      background: #43a047;
+    }
+    .calendar-grid .day-cell .schedule-item.afternoon {
+      background: #fb8c00;
+    }
+    .calendar-grid .day-cell .schedule-item.evening {
+      background: #7b1fa2;
     }
     .calendar-grid .day-cell .schedule-more {
-      font-size: 10px;
+      font-size: 11px;
       color: #666;
       margin-top: 2px;
+      cursor: pointer;
+    }
+    .calendar-grid .day-cell .schedule-more:hover {
+      color: #4a90d9;
+      text-decoration: underline;
+    }
+    /* カレンダーツールチップ */
+    .calendar-tooltip {
+      position: fixed;
+      background: #333;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      max-width: 250px;
+      z-index: 1000;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
     /* 検索オーバーレイ */
     .search-overlay {
@@ -2878,14 +2912,24 @@
       dayNumber.textContent = date.getDate();
       cell.appendChild(dayNumber);
 
-      // 予定を表示（最大3件）
-      const maxShow = 3;
+      // 予定を表示（最大4件）
+      const maxShow = 4;
       daySchedules.slice(0, maxShow).forEach(s => {
         const item = document.createElement('div');
-        item.className = 'schedule-item' + (s.isOther ? ' other' : '');
+        let timeClass = '';
+        if (s.time) {
+          const hour = parseInt(s.time.slice(0, 2));
+          if (hour < 12) timeClass = ' morning';
+          else if (hour < 17) timeClass = ' afternoon';
+          else timeClass = ' evening';
+        }
+        item.className = 'schedule-item' + (s.isOther ? ' other' : timeClass);
         const timeStr = s.time ? s.time.slice(0, 2) + ':' + s.time.slice(2) + ' ' : '';
         item.textContent = timeStr + s.title;
-        item.title = `${s.time || ''} ${s.title}`;
+        // ツールチップ用データ属性
+        item.dataset.tooltip = `${s.time ? s.time.slice(0, 2) + ':' + s.time.slice(2) : '時間未定'} ${s.title}`;
+        item.addEventListener('mouseenter', showCalendarTooltip);
+        item.addEventListener('mouseleave', hideCalendarTooltip);
         cell.appendChild(item);
       });
 
@@ -2894,10 +2938,49 @@
         const more = document.createElement('div');
         more.className = 'schedule-more';
         more.textContent = `+${daySchedules.length - maxShow}件`;
+        more.dataset.date = dateStr;
+        more.addEventListener('click', () => showDaySchedules(dateStr, daySchedules));
         cell.appendChild(more);
       }
 
       return cell;
+    }
+
+    // カレンダーツールチップ
+    let calendarTooltipEl = null;
+
+    function showCalendarTooltip(e) {
+      const text = e.target.dataset.tooltip;
+      if (!text) return;
+
+      if (!calendarTooltipEl) {
+        calendarTooltipEl = document.createElement('div');
+        calendarTooltipEl.className = 'calendar-tooltip';
+        document.body.appendChild(calendarTooltipEl);
+      }
+
+      calendarTooltipEl.textContent = text;
+      calendarTooltipEl.style.display = 'block';
+
+      const rect = e.target.getBoundingClientRect();
+      calendarTooltipEl.style.left = rect.left + 'px';
+      calendarTooltipEl.style.top = (rect.bottom + 5) + 'px';
+    }
+
+    function hideCalendarTooltip() {
+      if (calendarTooltipEl) {
+        calendarTooltipEl.style.display = 'none';
+      }
+    }
+
+    // 日付の全予定を表示
+    function showDaySchedules(dateStr, daySchedules) {
+      const list = daySchedules.map(s => {
+        const timeStr = s.time ? s.time.slice(0, 2) + ':' + s.time.slice(2) : '未定';
+        return `${timeStr} ${s.title}`;
+      }).join('\n');
+      addMessage('system', `📅 ${dateStr} の予定:\n${list}`);
+      closePopup('calendarPopup');
     }
 
     // ============================================
