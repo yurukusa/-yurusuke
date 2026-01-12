@@ -784,11 +784,35 @@
       let time = null;
       let consumed = '';
 
+      // 時間の後に続く助詞（から、より、に、まで等）も含めて消費する
+      const timeSuffix = '(?:[\\s　]*(から|より|に|まで|頃))?';
+
       const timePatterns = [
-        { regex: /(\d{1,2})[時:](\d{2})分?/, handler: (m) => ({ h: parseInt(m[1]), m: parseInt(m[2]) }) },
-        { regex: /(\d{1,2})時半/, handler: (m) => ({ h: parseInt(m[1]), m: 30 }) },
-        { regex: /(\d{1,2})時/, handler: (m) => ({ h: parseInt(m[1]), m: 0 }) },
-        { regex: /(?<![\/\d])(\d{3,4})(?!\d|日|年|月)/, handler: (m) => {
+        // 午前/午後付きの時間
+        { regex: new RegExp(`(午前|午後)[\\s　]*(\\d{1,2})[時:](\\d{2})分?${timeSuffix}`), handler: (m) => {
+          let h = parseInt(m[2]);
+          if (m[1] === '午後' && h < 12) h += 12;
+          if (m[1] === '午前' && h === 12) h = 0;
+          return { h, m: parseInt(m[3]) };
+        }},
+        { regex: new RegExp(`(午前|午後)[\\s　]*(\\d{1,2})時半${timeSuffix}`), handler: (m) => {
+          let h = parseInt(m[2]);
+          if (m[1] === '午後' && h < 12) h += 12;
+          if (m[1] === '午前' && h === 12) h = 0;
+          return { h, m: 30 };
+        }},
+        { regex: new RegExp(`(午前|午後)[\\s　]*(\\d{1,2})時${timeSuffix}`), handler: (m) => {
+          let h = parseInt(m[2]);
+          if (m[1] === '午後' && h < 12) h += 12;
+          if (m[1] === '午前' && h === 12) h = 0;
+          return { h, m: 0 };
+        }},
+        // 通常の時間表記（助詞付き）
+        { regex: new RegExp(`(\\d{1,2})[時:](\\d{2})分?${timeSuffix}`), handler: (m) => ({ h: parseInt(m[1]), m: parseInt(m[2]) }) },
+        { regex: new RegExp(`(\\d{1,2})時半${timeSuffix}`), handler: (m) => ({ h: parseInt(m[1]), m: 30 }) },
+        { regex: new RegExp(`(\\d{1,2})時${timeSuffix}`), handler: (m) => ({ h: parseInt(m[1]), m: 0 }) },
+        // 4桁/3桁時間
+        { regex: /(?<![\/\d])(\d{3,4})[\s　]*(から|より|に)?(?!\d|日|年|月)/, handler: (m) => {
           const t = m[1].padStart(4, '0');
           const h = parseInt(t.slice(0, 2));
           const min = parseInt(t.slice(2));
@@ -912,6 +936,9 @@
       if (timeResult) {
         title = title.replace(timeResult.consumed, '').trim();
       }
+
+      // 末尾のアクション動詞を除去（「を入れて」「を追加」「を登録」など）
+      title = title.replace(/を?(入れ(て|る)?|追加(して|する)?|登録(して|する)?|予定(して|する)?|設定(して|する)?)$/, '').trim();
 
       // タイトルのクリーンアップ
       title = title
@@ -1228,9 +1255,9 @@
     // 変更・削除リクエストのパーサー
     // ============================================
     function parseModificationRequest(input) {
-      // 変更パターン1: 「〜を〜に変更」「〜を〜にして」「〜を〜に修正」
+      // 変更パターン1: 「〜を〜に変更」「〜を〜にして」「〜を〜に修正」「〜を〜に変えて」
       // 「を」を区切りとして使用（「の」は対象の一部として扱う：1月12日の会議 など）
-      const modifyMatch1 = input.match(/(.+)を(.+?)[にへ](変更|して|する|移動|変えて|修正|直して|訂正)/);
+      const modifyMatch1 = input.match(/(.+)を(.+?)[にへ](変更|して|する|移動|変えて|変える|修正|直して|直す|訂正)/);
       if (modifyMatch1) {
         const target = modifyMatch1[1];
         const newValue = modifyMatch1[2];
@@ -1239,15 +1266,15 @@
 
       // 変更パターン2: 「〜 日付 時間に変更」「〜 時間に変更」「〜 日付に変更」
       // 区切り文字: スペース、「は」「を」「、」
-      const modifyEndMatch = input.match(/[にへ](変更|変えて|移動|して|修正|直して|訂正)$/);
+      const modifyEndMatch = input.match(/[にへ](変更|変えて|変える|移動|して|する|修正|直して|直す|訂正)$/);
       if (modifyEndMatch) {
         const beforeEnd = input.slice(0, modifyEndMatch.index).trim();
 
         // 区切り文字パターン: スペース、は、を、、
         const sep = '[\\s　はを、]+';
 
-        // パターン1: 日付+時間（例: 2/15 18時、2/15 1800）
-        const dateTimeRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}\\/\\d{1,2}[\\s　]+(?:\\d{1,2}時半?|\\d{3,4}))$`);
+        // パターン1: 日付+時間（例: 2/15 18時、2/15 1800、来週の月曜 15時）
+        const dateTimeRegex = new RegExp(`^(.+?)${sep}((?:\\d{1,2}\\/\\d{1,2}|今日|明日|明後日|あさって|来週.+?曜日?)[\\s　]*(?:\\d{1,2}時半?|\\d{3,4}))$`);
         const dateTimeMatch = beforeEnd.match(dateTimeRegex);
         if (dateTimeMatch) {
           const targetPart = dateTimeMatch[1].trim();
@@ -1255,8 +1282,8 @@
           return parseTargetAndAction(targetPart, 'modify', newValuePart);
         }
 
-        // パターン2: 時間のみ（例: 18時、1800）
-        const timeRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}時半?|\\d{3,4})$`);
+        // パターン2: 時間のみ（例: 18時、1800、午後3時、15時から）
+        const timeRegex = new RegExp(`^(.+?)${sep}((?:午前|午後)?\\d{1,2}時半?(?:から)?|\\d{3,4})$`);
         const timeExprMatch = beforeEnd.match(timeRegex);
         if (timeExprMatch) {
           const targetPart = timeExprMatch[1].trim();
@@ -1267,8 +1294,8 @@
           }
         }
 
-        // パターン3: 日付のみ（例: 2/15）
-        const dateRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}\\/\\d{1,2})$`);
+        // パターン3: 日付のみ（例: 2/15、来週の月曜、明日）
+        const dateRegex = new RegExp(`^(.+?)${sep}(\\d{1,2}\\/\\d{1,2}|今日|明日|明後日|あさって|来週の?[日月火水木金土]曜日?)$`);
         const dateExprMatch = beforeEnd.match(dateRegex);
         if (dateExprMatch) {
           const targetPart = dateExprMatch[1].trim();
@@ -1280,8 +1307,19 @@
         }
       }
 
+      // 相対時間変更パターン: 「〜を2時間遅らせて」「〜を1時間早めて」「〜を30分後にして」
+      const relativeTimeMatch = input.match(/(.+?)を(\d+)(時間|分)(遅らせ|早め|後に|前に)(て|る)?$/);
+      if (relativeTimeMatch) {
+        const target = relativeTimeMatch[1].trim();
+        const amount = parseInt(relativeTimeMatch[2]);
+        const unit = relativeTimeMatch[3]; // 時間 or 分
+        const direction = relativeTimeMatch[4]; // 遅らせ/後に or 早め/前に
+        const isLater = direction === '遅らせ' || direction === '後に';
+        return parseTargetAndRelativeTime(target, amount, unit, isLater);
+      }
+
       // 削除パターン: 末尾に削除キーワードがある場合
-      const deleteKeywords = /(を?削除|を?消して|を?消す|なくなった|無くなった|キャンセル|取り?消し|中止|やめ(た|る)?|間違い(だった)?)$/;
+      const deleteKeywords = /(を?(削除|消して|消す)|なくなった|無くなった|キャンセル(して|する)?|取り?消し(て|た)?|中止(して|する)?|やめ(て|た|る)?|間違い(だった)?|なくなる|無くなる|なし|ナシ|やらない)$/;
       const deleteMatch = input.match(deleteKeywords);
       if (deleteMatch) {
         const target = input.replace(deleteKeywords, '').trim();
@@ -1289,6 +1327,66 @@
       }
 
       return null;
+    }
+
+    // 相対時間変更のパーサー
+    function parseTargetAndRelativeTime(targetStr, amount, unit, isLater) {
+      // 対象を特定
+      let targetDate = null;
+      let targetTime = null;
+      let keyword = targetStr;
+
+      const dateResult = parseDateFromText(targetStr);
+      if (dateResult) {
+        targetDate = `${dateResult.date.getMonth() + 1}/${dateResult.date.getDate()}`;
+        keyword = targetStr.replace(dateResult.consumed, '').trim();
+      }
+
+      const timeResult = parseTimeFromText(keyword);
+      if (timeResult) {
+        targetTime = formatTime(timeResult.time);
+        keyword = keyword.replace(timeResult.consumed, '').trim();
+      }
+
+      keyword = keyword.replace(/の?予定$/, '').replace(/^の/, '').trim();
+
+      const matches = findSchedule(targetDate, targetTime, keyword);
+      if (matches.length === 0) {
+        return { error: '該当する予定が見つかりませんでした。' };
+      }
+      if (matches.length > 1) {
+        return { error: `複数の予定が見つかりました。もう少し具体的に指定してください。\n${matches.map(s => `・${s.date} ${s.time || ''} ${s.title}`).join('\n')}` };
+      }
+
+      const target = matches[0];
+
+      // 新しい時間を計算
+      if (!target.time || target.time === '未定') {
+        return { error: '時間未定の予定は時間変更できません。' };
+      }
+
+      const currentHour = parseInt(target.time.slice(0, 2));
+      const currentMin = parseInt(target.time.slice(2));
+      let totalMinutes = currentHour * 60 + currentMin;
+
+      const deltaMinutes = unit === '時間' ? amount * 60 : amount;
+      totalMinutes += isLater ? deltaMinutes : -deltaMinutes;
+
+      if (totalMinutes < 0) totalMinutes += 24 * 60;
+      if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
+
+      const newHour = Math.floor(totalMinutes / 60);
+      const newMin = totalMinutes % 60;
+      const newTime = String(newHour).padStart(2, '0') + String(newMin).padStart(2, '0');
+
+      return {
+        type: 'modify',
+        target,
+        newSchedule: {
+          ...target,
+          time: newTime
+        }
+      };
     }
 
     function parseTargetAndAction(targetStr, action, newValueStr) {
@@ -2455,21 +2553,53 @@
       const weekdayMap = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
       const targetDay = weekdayMap[repeatMatch[1]];
 
-      // 曜日部分を除いた残りを解析
-      const rest = input.replace(/毎週[日月火水木金土]曜?日?/, '').trim();
+      // 曜日部分を除いた残りを解析（先頭の「の」「に」「は」も除去）
+      let rest = input.replace(/毎週[日月火水木金土]曜?日?/, '').trim();
+      rest = rest.replace(/^[のにはで][\s　]*/, '').trim();
 
       let time = null;
       let title = rest;
 
-      // 時間パターンを検出: 1000, 10時, 10時半, 1000 など
-      const timeMatch = rest.match(/^[\s　]*(\d{3,4}|\d{1,2}時半?)[\s　]*/);
-      if (timeMatch) {
-        const timeResult = parseTimeFromText(timeMatch[1]);
-        if (timeResult) {
-          time = formatTime(timeResult.time);
-          title = rest.replace(timeMatch[0], '').trim();
+      // 時間パターンを検出（自然語対応）
+      // 「10時から」「10時に」「10時半から」「1000」「10:00」など
+      const timePatterns = [
+        /^[\s　]*(午前|午後)?[\s　]*(\d{1,2})[\s　]*[:：時][\s　]*(\d{1,2})?分?[\s　]*(半)?[\s　]*(から|より|に|まで)?[\s　]*/,
+        /^[\s　]*(\d{3,4})[\s　]*(から|より|に)?[\s　]*/
+      ];
+
+      for (const pattern of timePatterns) {
+        const timeMatch = rest.match(pattern);
+        if (timeMatch) {
+          let hours, minutes = 0;
+
+          if (timeMatch[0].match(/\d{3,4}/)) {
+            // 1000形式
+            const numMatch = timeMatch[0].match(/(\d{3,4})/);
+            if (numMatch) {
+              const num = numMatch[1];
+              hours = parseInt(num.slice(0, -2)) || parseInt(num.slice(0, 1));
+              minutes = parseInt(num.slice(-2));
+            }
+          } else {
+            // 10時形式
+            const ampm = timeMatch[1]; // 午前/午後
+            hours = parseInt(timeMatch[2]);
+            if (timeMatch[3]) minutes = parseInt(timeMatch[3]);
+            if (timeMatch[4] === '半') minutes = 30;
+            if (ampm === '午後' && hours < 12) hours += 12;
+            if (ampm === '午前' && hours === 12) hours = 0;
+          }
+
+          if (!isNaN(hours)) {
+            time = String(hours).padStart(2, '0') + String(minutes).padStart(2, '0');
+            title = rest.replace(timeMatch[0], '').trim();
+            break;
+          }
         }
       }
+
+      // タイトルから余分な助詞を除去
+      title = title.replace(/^[のにはで、][\s　]*/, '').trim();
 
       if (!title) {
         title = `毎週${repeatMatch[1]}曜の予定`;
