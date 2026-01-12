@@ -255,6 +255,7 @@
     }
     .btn-ok { background: #28a745; color: white; }
     .btn-cancel { background: #dc3545; color: white; }
+    .btn-delete { background: #dc3545; color: white; }
     .btn-skip { background: #6c757d; color: white; }
     .btn-add { background: #007bff; color: white; }
     .input-form {
@@ -1119,22 +1120,44 @@
         keepBtn.onclick = () => handleConflictChoice(-1);
         btns.appendChild(keepBtn);
         div.appendChild(btns);
-      } else if (buttonType && buttonType.type === 'double-booking') {
+      } else if (buttonType && buttonType.type === 'double-booking-select') {
+        // 第1段階: どの予定を修正するか選択
         const btns = document.createElement('div');
         btns.className = 'confirm-buttons';
         btns.style.flexWrap = 'wrap';
         buttonType.schedules.forEach((s, idx) => {
           const btn = document.createElement('button');
           btn.className = 'btn-add';
-          btn.textContent = `${s.title}を他人の予定にする`;
-          btn.onclick = () => handleDoubleBookingResolve(idx);
+          btn.textContent = s.title;
+          btn.onclick = () => handleDoubleBookingSelect(idx);
           btns.appendChild(btn);
         });
         const keepBtn = document.createElement('button');
         keepBtn.className = 'btn-skip';
         keepBtn.textContent = 'このまま';
-        keepBtn.onclick = () => handleDoubleBookingResolve(-1);
+        keepBtn.onclick = () => handleDoubleBookingSelect(-1);
         btns.appendChild(keepBtn);
+        div.appendChild(btns);
+      } else if (buttonType && buttonType.type === 'double-booking-action') {
+        // 第2段階: 選択した予定をどうするか
+        const btns = document.createElement('div');
+        btns.className = 'confirm-buttons';
+        btns.style.flexWrap = 'wrap';
+        const otherBtn = document.createElement('button');
+        otherBtn.className = 'btn-add';
+        otherBtn.textContent = '他人の予定にする';
+        otherBtn.onclick = () => handleDoubleBookingAction('other');
+        btns.appendChild(otherBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-delete';
+        deleteBtn.textContent = '削除する';
+        deleteBtn.onclick = () => handleDoubleBookingAction('delete');
+        btns.appendChild(deleteBtn);
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-skip';
+        cancelBtn.textContent = 'キャンセル';
+        cancelBtn.onclick = () => handleDoubleBookingAction('cancel');
+        btns.appendChild(cancelBtn);
         div.appendChild(btns);
       }
 
@@ -1448,21 +1471,59 @@
       setInputEnabled(true);
     }
 
-    function handleDoubleBookingResolve(idx) {
+    // 第1段階: どの予定を修正するか選択
+    function handleDoubleBookingSelect(idx) {
       if (!pendingAction || pendingAction.type !== 'resolve-double-booking') return;
 
       if (idx >= 0) {
-        // 選択された予定を他人の予定に変換
-        const targetSchedule = pendingAction.currentConflict.schedules[idx];
-        const scheduleIdx = schedules.indexOf(targetSchedule);
+        // 選択された予定をpendingActionに保存して第2段階へ
+        pendingAction.selectedSchedule = pendingAction.currentConflict.schedules[idx];
+        pendingAction.selectedIndex = idx;
+        showDoubleBookingActions();
+      } else {
+        // 「このまま」を選択した場合は次のダブルブッキングへ
+        moveToNextDoubleBooking();
+      }
+    }
+
+    // 第2段階: 選択した予定をどうするか表示
+    function showDoubleBookingActions() {
+      const schedule = pendingAction.selectedSchedule;
+      const confirmText = `「${schedule.title}」をどうしますか？`;
+      addMessage('confirm', confirmText, { type: 'double-booking-action' });
+    }
+
+    // 第2段階: アクション実行
+    function handleDoubleBookingAction(action) {
+      if (!pendingAction || pendingAction.type !== 'resolve-double-booking') return;
+
+      const targetSchedule = pendingAction.selectedSchedule;
+      const scheduleIdx = schedules.indexOf(targetSchedule);
+
+      if (action === 'other') {
+        // 他人の予定に変換
         if (scheduleIdx !== -1) {
           schedules[scheduleIdx].isOther = true;
           localStorage.setItem('schedules', JSON.stringify(schedules));
-          addMessage('system', `${targetSchedule.title} を他人の予定に変更しました。`);
+          addMessage('system', `「${targetSchedule.title}」を他人の予定に変更しました。`);
         }
+        moveToNextDoubleBooking();
+      } else if (action === 'delete') {
+        // 削除
+        if (scheduleIdx !== -1) {
+          schedules.splice(scheduleIdx, 1);
+          localStorage.setItem('schedules', JSON.stringify(schedules));
+          addMessage('system', `「${targetSchedule.title}」を削除しました。`);
+        }
+        moveToNextDoubleBooking();
+      } else if (action === 'cancel') {
+        // キャンセル - 第1段階に戻る
+        showNextDoubleBooking();
       }
+    }
 
-      // 次のダブルブッキングをチェック
+    // 次のダブルブッキングへ移動
+    function moveToNextDoubleBooking() {
       pendingAction.conflictIndex++;
       if (pendingAction.conflictIndex < pendingAction.conflicts.length) {
         showNextDoubleBooking();
@@ -1476,8 +1537,8 @@
     function showNextDoubleBooking() {
       const conflict = pendingAction.conflicts[pendingAction.conflictIndex];
       pendingAction.currentConflict = conflict;
-      const confirmText = `${conflict.date} ${conflict.time} に予定が重なっています`;
-      addMessage('confirm', confirmText, { type: 'double-booking', schedules: conflict.schedules });
+      const confirmText = `${conflict.date} ${conflict.time} に予定が重なっています。どの予定を修正しますか？`;
+      addMessage('confirm', confirmText, { type: 'double-booking-select', schedules: conflict.schedules });
     }
 
     function handleConflictChoice(choiceIdx) {
