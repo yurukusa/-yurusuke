@@ -1169,33 +1169,46 @@
     // 一括削除パーサー
     // ============================================
     function parseBulkDelete(input) {
-      // 末尾に削除キーワードがあり、複数行を含む場合
+      // 末尾に削除キーワードがあるかチェック
       const deleteKeywords = /(を?削除|を?消して|を?消す)$/;
       if (!deleteKeywords.test(input)) return null;
 
-      // 改行で分割して2行以上あるかチェック
-      const lines = input.replace(deleteKeywords, '').trim().split(/[\n\r]+/).filter(l => l.trim());
-      if (lines.length < 2) return null;
+      const content = input.replace(deleteKeywords, '').trim();
 
+      // 改行またはスペースで日付パターンを探す
+      // 日付パターン: 1/26, 2/2 など
+      const dateRegex = /(\d{1,2}\/\d{1,2})/g;
+      const dates = content.match(dateRegex);
+
+      // 2つ以上の日付がないと一括削除ではない
+      if (!dates || dates.length < 2) return null;
+
+      // 日付で分割して各エントリをパース
+      const segments = content.split(/(?=\d{1,2}\/\d{1,2})/);
       const matches = [];
       const seen = new Set();
 
-      lines.forEach(line => {
-        const trimmed = line.trim();
+      segments.forEach(segment => {
+        const trimmed = segment.trim();
         if (!trimmed) return;
 
-        // 日付パターンを検出: 1/26, 1/26 1000, 1/26  1000 タイトル
-        const lineMatch = trimmed.match(/^(\d{1,2}\/\d{1,2})\s+(\d{4})?\s*(.*)$/);
-        if (lineMatch) {
-          const date = lineMatch[1];
-          const time = lineMatch[2] || null;
-          const title = lineMatch[3]?.trim() || null;
+        // 日付+時間+タイトル または 日付+タイトル を検出
+        const entryMatch = trimmed.match(/^(\d{1,2}\/\d{1,2})\s+(\d{4})?\s*(.*)$/);
+        if (entryMatch) {
+          const date = entryMatch[1];
+          const time = entryMatch[2] || null;
+          let title = entryMatch[3]?.trim() || null;
+
+          // タイトルの末尾の余分なスペースや次のエントリの一部を除去
+          if (title) {
+            title = title.replace(/\s+$/, '');
+          }
 
           // マッチする予定を検索
           schedules.forEach(s => {
             const dateMatch = s.date === date;
             const timeMatch = !time || s.time === time;
-            const titleMatch = !title || s.title === title || s.title.includes(title);
+            const titleMatch = !title || s.title === title || s.title.includes(title) || title.includes(s.title);
 
             if (dateMatch && timeMatch && titleMatch) {
               const key = `${s.date}-${s.time}-${s.title}`;
@@ -1208,7 +1221,7 @@
         }
       });
 
-      return { matches };
+      return matches.length >= 2 ? { matches } : null;
     }
 
     // ============================================
@@ -2436,26 +2449,33 @@
     // ============================================
     function parseRepeatSchedule(input) {
       // 「毎週」パターンを検出
-      const repeatMatch = input.match(/毎週([日月火水木金土])曜?日?\s*(\d{1,2}時半?|\d{3,4})?\s*(.+)?/);
+      const repeatMatch = input.match(/毎週([日月火水木金土])曜?日?/);
       if (!repeatMatch) return null;
 
       const weekdayMap = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
       const targetDay = weekdayMap[repeatMatch[1]];
-      let time = null;
-      let title = repeatMatch[3] || '';
 
-      if (repeatMatch[2]) {
-        const timeResult = parseTimeFromText(repeatMatch[2]);
+      // 曜日部分を除いた残りを解析
+      const rest = input.replace(/毎週[日月火水木金土]曜?日?/, '').trim();
+
+      let time = null;
+      let title = rest;
+
+      // 時間パターンを検出: 1000, 10時, 10時半, 1000 など
+      const timeMatch = rest.match(/^[\s　]*(\d{3,4}|\d{1,2}時半?)[\s　]*/);
+      if (timeMatch) {
+        const timeResult = parseTimeFromText(timeMatch[1]);
         if (timeResult) {
           time = formatTime(timeResult.time);
+          title = rest.replace(timeMatch[0], '').trim();
         }
       }
 
-      if (!title.trim()) {
+      if (!title) {
         title = `毎週${repeatMatch[1]}曜の予定`;
       }
 
-      return { targetDay, time, title: title.trim() };
+      return { targetDay, time, title };
     }
 
     function generateRepeatSchedules(targetDay, time, title) {
