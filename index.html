@@ -901,7 +901,8 @@
     // ============================================
     function parseModificationRequest(input) {
       // 変更パターン1: 「〜を〜に変更」「〜を〜にして」「〜を〜に修正」
-      const modifyMatch1 = input.match(/(.+?)[をの](.+?)[にへ](変更|して|する|移動|変えて|修正|直して|訂正)/);
+      // 「を」を区切りとして使用（「の」は対象の一部として扱う：1月12日の会議 など）
+      const modifyMatch1 = input.match(/(.+)を(.+?)[にへ](変更|して|する|移動|変えて|修正|直して|訂正)/);
       if (modifyMatch1) {
         const target = modifyMatch1[1];
         const newValue = modifyMatch1[2];
