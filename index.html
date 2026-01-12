@@ -318,6 +318,159 @@
         padding-bottom: calc(12px + env(safe-area-inset-bottom));
       }
     }
+    /* トグルスイッチ */
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 26px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: 0.3s;
+      border-radius: 26px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: #4a90d9;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    .settings-item select {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    /* カレンダー */
+    .calendar-popup {
+      width: 350px;
+      max-width: 95vw;
+    }
+    .calendar-content {
+      padding: 12px;
+    }
+    .calendar-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .cal-nav-btn {
+      background: #4a90d9;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .calendar-grid .day-header {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px;
+      color: #666;
+    }
+    .calendar-grid .day-header:first-child { color: #dc3545; }
+    .calendar-grid .day-header:last-child { color: #007bff; }
+    .calendar-grid .day-cell {
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 13px;
+      border-radius: 6px;
+      cursor: default;
+      min-height: 36px;
+    }
+    .calendar-grid .day-cell.other-month {
+      color: #ccc;
+    }
+    .calendar-grid .day-cell.today {
+      background: #4a90d9;
+      color: white;
+      font-weight: 600;
+    }
+    .calendar-grid .day-cell.has-schedule {
+      background: #e3f2fd;
+      font-weight: 600;
+    }
+    .calendar-grid .day-cell.has-schedule.today {
+      background: #4a90d9;
+    }
+    .calendar-grid .day-cell .schedule-dot {
+      display: block;
+      font-size: 8px;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    /* 検索オーバーレイ */
+    .search-overlay {
+      position: fixed;
+      top: 50px;
+      right: 10px;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      z-index: 150;
+    }
+    .search-overlay input {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      width: 150px;
+    }
+    .search-overlay button {
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .search-overlay button:hover {
+      background: #f5f5f5;
+    }
+    #searchCount {
+      font-size: 12px;
+      color: #666;
+      min-width: 40px;
+    }
+    /* ハイライト */
+    .search-highlight {
+      background: #ffeb3b;
+      padding: 1px 2px;
+      border-radius: 2px;
+    }
+    .search-highlight.current {
+      background: #ff9800;
+    }
   </style>
 </head>
 <body>
@@ -328,7 +481,10 @@
         <button class="header-btn" id="helpBtn">使い方</button>
       </div>
       <h1>ゆるスケ</h1>
-      <a href="https://ko-fi.com/yurukusa" target="_blank" rel="noopener noreferrer" class="header-btn icon-btn support-icon">☕</a>
+      <div class="header-buttons">
+        <button class="header-btn icon-btn" id="calendarBtn">📅</button>
+        <a href="https://ko-fi.com/yurukusa" target="_blank" rel="noopener noreferrer" class="header-btn icon-btn support-icon">☕</a>
+      </div>
     </header>
 
     <!-- 使い方ポップアップ -->
@@ -359,6 +515,16 @@
           カッコで囲むか、最後に「他人の予定」をつけてね<br>
           <span class="example">例：1/20 (1400 子供の習い事)</span><br>
           <span class="example">例：1/20 1400 子供の習い事 他人の予定</span>
+
+          <h3>【繰り返し予定を追加する】</h3>
+          「毎週〇曜」で自動的に追加されるよ<br>
+          <span class="example">例：毎週月曜 10時 定例会議</span><br>
+          <span class="example">例：毎週金曜 18時 飲み会</span>
+
+          <h3>【便利機能】</h3>
+          <span class="example">Ctrl+Z：元に戻す</span><br>
+          <span class="example">Ctrl+F：検索（ハイライト）</span><br>
+          <span class="example">📅：カレンダー表示</span>
         </div>
       </div>
     </div>
@@ -371,6 +537,32 @@
           <button class="popup-close" onclick="closePopup('settingsPopup')">×</button>
         </div>
         <div class="popup-content">
+          <div class="settings-item">
+            <span>🔔 リマインダー通知</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="reminderToggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-item" id="reminderMinutesRow" style="display: none;">
+            <span>　何分前に通知</span>
+            <select id="reminderMinutesSelect">
+              <option value="5">5分前</option>
+              <option value="10">10分前</option>
+              <option value="15">15分前</option>
+              <option value="30">30分前</option>
+              <option value="60">1時間前</option>
+            </select>
+          </div>
+          <div class="settings-item">
+            <span>🔄 繰り返し予定の期間</span>
+            <select id="repeatEndMonthsSelect">
+              <option value="1">翌月末まで</option>
+              <option value="2">2ヶ月先まで</option>
+              <option value="3">3ヶ月先まで</option>
+              <option value="6">半年先まで</option>
+            </select>
+          </div>
           <div class="settings-item disabled">
             <span>アカウント連携</span>
             <span class="badge">準備中</span>
@@ -385,12 +577,41 @@
           </div>
           <button class="data-btn" id="exportBtn">📤 予定をエクスポート</button>
           <button class="data-btn" id="importBtn">📥 予定をインポート</button>
+          <button class="data-btn" id="exportIcalBtn">📅 Googleカレンダー用エクスポート</button>
           <input type="file" id="importFile" accept=".json" style="display: none;">
           <a href="https://ko-fi.com/yurukusa" target="_blank" rel="noopener noreferrer" class="support-btn">☕ 開発を応援する</a>
           <button class="delete-all-btn" id="deleteAllBtn">全ての予定を削除</button>
         </div>
       </div>
     </div>
+
+    <!-- カレンダービューポップアップ -->
+    <div class="popup-overlay" id="calendarPopup" style="display: none;">
+      <div class="popup calendar-popup">
+        <div class="popup-header">
+          <span>カレンダー</span>
+          <button class="popup-close" onclick="closePopup('calendarPopup')">×</button>
+        </div>
+        <div class="popup-content calendar-content">
+          <div class="calendar-nav">
+            <button class="cal-nav-btn" onclick="changeCalendarMonth(-1)">◀</button>
+            <span id="calendarMonthLabel"></span>
+            <button class="cal-nav-btn" onclick="changeCalendarMonth(1)">▶</button>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 検索オーバーレイ -->
+    <div class="search-overlay" id="searchOverlay" style="display: none;">
+      <input type="text" id="searchInput" placeholder="検索...">
+      <span id="searchCount"></span>
+      <button onclick="searchPrev()">▲</button>
+      <button onclick="searchNext()">▼</button>
+      <button onclick="closeSearch()">×</button>
+    </div>
+
     <div class="main-container">
       <div class="chat-section">
         <div class="messages" id="messages"></div>
@@ -407,6 +628,15 @@
     // 状態管理
     let schedules = JSON.parse(localStorage.getItem('schedules') || '[]');
     let pendingAction = null; // { type: 'add'|'modify'|'delete', ... }
+    let undoStack = []; // Undo用のスタック
+    const MAX_UNDO = 20;
+
+    // 設定の読み込み
+    let appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+    if (!appSettings.repeatEndMonths) appSettings.repeatEndMonths = 2; // 繰り返し予定の期間（月数）
+    if (!appSettings.reminderMinutes) appSettings.reminderMinutes = 30; // リマインダー何分前
+    if (!appSettings.reminderEnabled) appSettings.reminderEnabled = false;
+    localStorage.setItem('appSettings', JSON.stringify(appSettings));
 
     // DOM要素
     const messagesEl = document.getElementById('messages');
@@ -1371,6 +1601,7 @@
     function handleConfirm() {
       if (!pendingAction) return;
 
+      saveForUndo();
       if (pendingAction.type === 'add') {
         schedules.push(pendingAction.schedule);
       } else if (pendingAction.type === 'add-multiple') {
@@ -1429,6 +1660,7 @@
 
     function handleDuplicateAdd() {
       if (pendingAction && pendingAction.schedule) {
+        saveForUndo();
         schedules.push(pendingAction.schedule);
         localStorage.setItem('schedules', JSON.stringify(schedules));
         showScheduleList();
@@ -1439,6 +1671,7 @@
 
     function handleWarningAdd() {
       if (pendingAction && pendingAction.schedule) {
+        saveForUndo();
         schedules.push(pendingAction.schedule);
         localStorage.setItem('schedules', JSON.stringify(schedules));
         showScheduleList();
@@ -1455,6 +1688,7 @@
 
     function handleModifyWarningConfirm() {
       if (pendingAction && pendingAction.target && pendingAction.newSchedule) {
+        saveForUndo();
         const idx = schedules.indexOf(pendingAction.target);
         if (idx !== -1) {
           schedules[idx] = pendingAction.newSchedule;
@@ -1504,6 +1738,7 @@
       if (action === 'other') {
         // 他人の予定に変換
         if (scheduleIdx !== -1) {
+          saveForUndo();
           schedules[scheduleIdx].isOther = true;
           localStorage.setItem('schedules', JSON.stringify(schedules));
           addMessage('system', `「${targetSchedule.title}」を他人の予定に変更しました。`);
@@ -1512,6 +1747,7 @@
       } else if (action === 'delete') {
         // 削除
         if (scheduleIdx !== -1) {
+          saveForUndo();
           schedules.splice(scheduleIdx, 1);
           localStorage.setItem('schedules', JSON.stringify(schedules));
           addMessage('system', `「${targetSchedule.title}」を削除しました。`);
@@ -1629,6 +1865,22 @@
         (scheduleCheckPatterns.some(p => normalizedInput === p) && !/\d/.test(input));
       if (isScheduleCheck) {
         showScheduleList();
+        return;
+      }
+
+      // 繰り返し予定のチェック
+      const repeatResult = parseRepeatSchedule(input);
+      if (repeatResult) {
+        const newSchedules = generateRepeatSchedules(repeatResult.targetDay, repeatResult.time, repeatResult.title);
+        if (newSchedules.length > 0) {
+          const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+          const confirmText = `毎週${weekdays[repeatResult.targetDay]}曜「${repeatResult.title}」を${newSchedules.length}件追加しますか？`;
+          addMessage('confirm', confirmText, 'confirm');
+          pendingAction = { type: 'add-multiple', schedules: newSchedules };
+          setInputEnabled(false);
+        } else {
+          addMessage('system', '追加できる予定がありませんでした（全て重複）。');
+        }
         return;
       }
 
@@ -2048,7 +2300,456 @@
       }
     }
 
+    // ============================================
+    // Undo機能
+    // ============================================
+    function saveForUndo() {
+      undoStack.push(JSON.stringify(schedules));
+      if (undoStack.length > MAX_UNDO) {
+        undoStack.shift();
+      }
+    }
+
+    function performUndo() {
+      if (undoStack.length === 0) {
+        addMessage('system', '元に戻す操作がありません。');
+        return;
+      }
+      schedules = JSON.parse(undoStack.pop());
+      localStorage.setItem('schedules', JSON.stringify(schedules));
+      addMessage('system', '操作を元に戻しました。');
+      showScheduleList();
+    }
+
+    // ============================================
+    // 繰り返し予定
+    // ============================================
+    function parseRepeatSchedule(input) {
+      // 「毎週」パターンを検出
+      const repeatMatch = input.match(/毎週([日月火水木金土])曜?日?\s*(\d{1,2}時半?|\d{3,4})?\s*(.+)?/);
+      if (!repeatMatch) return null;
+
+      const weekdayMap = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
+      const targetDay = weekdayMap[repeatMatch[1]];
+      let time = null;
+      let title = repeatMatch[3] || '';
+
+      if (repeatMatch[2]) {
+        const timeResult = parseTimeFromText(repeatMatch[2]);
+        if (timeResult) {
+          time = formatTime(timeResult.time);
+        }
+      }
+
+      if (!title.trim()) {
+        title = `毎週${repeatMatch[1]}曜の予定`;
+      }
+
+      return { targetDay, time, title: title.trim() };
+    }
+
+    function generateRepeatSchedules(targetDay, time, title) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // 設定に基づいて終了日を計算
+      const endDate = new Date(today.getFullYear(), today.getMonth() + appSettings.repeatEndMonths + 1, 0);
+
+      const newSchedules = [];
+      let current = new Date(today);
+
+      // 最初の該当曜日を見つける
+      let daysToAdd = targetDay - current.getDay();
+      if (daysToAdd < 0) daysToAdd += 7;
+      current.setDate(current.getDate() + daysToAdd);
+
+      while (current <= endDate) {
+        const dateStr = `${current.getMonth() + 1}/${current.getDate()}`;
+        const schedule = {
+          date: dateStr,
+          time: time,
+          title: title,
+          fullDate: current.toISOString(),
+          isOther: false,
+          isRepeat: true
+        };
+
+        // 重複チェック
+        if (!isDuplicate(schedule)) {
+          newSchedules.push(schedule);
+        }
+
+        // 次の週へ
+        current.setDate(current.getDate() + 7);
+      }
+
+      return newSchedules;
+    }
+
+    // ============================================
+    // リマインダー通知
+    // ============================================
+    let reminderIntervalId = null;
+
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
+    function startReminderCheck() {
+      if (reminderIntervalId) clearInterval(reminderIntervalId);
+
+      if (!appSettings.reminderEnabled) return;
+
+      reminderIntervalId = setInterval(checkReminders, 60000); // 1分ごと
+      checkReminders(); // 即時実行
+    }
+
+    function checkReminders() {
+      if (!appSettings.reminderEnabled) return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+      const now = new Date();
+      const reminderMs = appSettings.reminderMinutes * 60 * 1000;
+
+      schedules.forEach(s => {
+        if (!s.time || s.isOther || s.notified) return;
+
+        const [month, day] = s.date.split('/').map(Number);
+        const scheduleDate = new Date(now.getFullYear(), month - 1, day);
+        const [hours, minutes] = [parseInt(s.time.slice(0, 2)), parseInt(s.time.slice(2))];
+        scheduleDate.setHours(hours, minutes, 0, 0);
+
+        const diff = scheduleDate.getTime() - now.getTime();
+
+        if (diff > 0 && diff <= reminderMs) {
+          new Notification('ゆるスケ', {
+            body: `${appSettings.reminderMinutes}分後: ${s.title}`,
+            icon: 'icon-192.png',
+            tag: `${s.date}-${s.time}-${s.title}`
+          });
+          s.notified = true;
+          localStorage.setItem('schedules', JSON.stringify(schedules));
+        }
+      });
+    }
+
+    // ============================================
+    // 検索・ハイライト機能
+    // ============================================
+    let searchMatches = [];
+    let currentMatchIndex = -1;
+    let originalMessagesHTML = '';
+
+    function openSearch() {
+      document.getElementById('searchOverlay').style.display = 'flex';
+      document.getElementById('searchInput').focus();
+      originalMessagesHTML = messagesEl.innerHTML;
+    }
+
+    function closeSearch() {
+      document.getElementById('searchOverlay').style.display = 'none';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchCount').textContent = '';
+      if (originalMessagesHTML) {
+        messagesEl.innerHTML = originalMessagesHTML;
+        originalMessagesHTML = '';
+      }
+      searchMatches = [];
+      currentMatchIndex = -1;
+    }
+
+    function performSearch(query) {
+      if (!query) {
+        if (originalMessagesHTML) {
+          messagesEl.innerHTML = originalMessagesHTML;
+        }
+        document.getElementById('searchCount').textContent = '';
+        searchMatches = [];
+        return;
+      }
+
+      // 元のHTMLを復元してから検索
+      if (originalMessagesHTML) {
+        messagesEl.innerHTML = originalMessagesHTML;
+      }
+
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      searchMatches = [];
+      let matchId = 0;
+
+      const messages = messagesEl.querySelectorAll('.message-content');
+      messages.forEach(msg => {
+        if (msg.textContent.toLowerCase().includes(query.toLowerCase())) {
+          msg.innerHTML = msg.innerHTML.replace(regex, (match) => {
+            const id = `search-match-${matchId++}`;
+            searchMatches.push(id);
+            return `<span class="search-highlight" id="${id}">${match}</span>`;
+          });
+        }
+      });
+
+      document.getElementById('searchCount').textContent = searchMatches.length > 0
+        ? `${searchMatches.length}件` : '0件';
+
+      if (searchMatches.length > 0) {
+        currentMatchIndex = 0;
+        highlightCurrentMatch();
+      }
+    }
+
+    function highlightCurrentMatch() {
+      document.querySelectorAll('.search-highlight.current').forEach(el => {
+        el.classList.remove('current');
+      });
+
+      if (currentMatchIndex >= 0 && searchMatches[currentMatchIndex]) {
+        const el = document.getElementById(searchMatches[currentMatchIndex]);
+        if (el) {
+          el.classList.add('current');
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+
+    function searchNext() {
+      if (searchMatches.length === 0) return;
+      currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+      highlightCurrentMatch();
+    }
+
+    function searchPrev() {
+      if (searchMatches.length === 0) return;
+      currentMatchIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+      highlightCurrentMatch();
+    }
+
+    // ============================================
+    // カレンダービュー
+    // ============================================
+    let calendarViewDate = new Date();
+
+    function openCalendar() {
+      calendarViewDate = new Date();
+      renderCalendar();
+      document.getElementById('calendarPopup').style.display = 'flex';
+    }
+
+    function changeCalendarMonth(delta) {
+      calendarViewDate.setMonth(calendarViewDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const year = calendarViewDate.getFullYear();
+      const month = calendarViewDate.getMonth();
+
+      document.getElementById('calendarMonthLabel').textContent = `${year}年${month + 1}月`;
+
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = '';
+
+      // 曜日ヘッダー
+      ['日', '月', '火', '水', '木', '金', '土'].forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'day-header';
+        header.textContent = day;
+        grid.appendChild(header);
+      });
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const today = new Date();
+      const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+
+      // 前月の日を埋める
+      for (let i = 0; i < firstDay.getDay(); i++) {
+        const prevDate = new Date(year, month, -firstDay.getDay() + i + 1);
+        const cell = createDayCell(prevDate, true);
+        grid.appendChild(cell);
+      }
+
+      // 当月の日
+      for (let d = 1; d <= lastDay.getDate(); d++) {
+        const date = new Date(year, month, d);
+        const cell = createDayCell(date, false);
+        grid.appendChild(cell);
+      }
+
+      // 翌月の日を埋める
+      const remaining = 42 - grid.children.length;
+      for (let i = 1; i <= remaining; i++) {
+        const nextDate = new Date(year, month + 1, i);
+        const cell = createDayCell(nextDate, true);
+        grid.appendChild(cell);
+      }
+    }
+
+    function createDayCell(date, isOtherMonth) {
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+      if (isOtherMonth) cell.classList.add('other-month');
+
+      const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+      const today = new Date();
+      const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
+
+      if (dateStr === todayStr && date.getFullYear() === today.getFullYear()) {
+        cell.classList.add('today');
+      }
+
+      const daySchedules = schedules.filter(s => s.date === dateStr);
+      if (daySchedules.length > 0) {
+        cell.classList.add('has-schedule');
+      }
+
+      cell.innerHTML = `<span>${date.getDate()}</span>`;
+      if (daySchedules.length > 0) {
+        cell.innerHTML += `<span class="schedule-dot">${'●'.repeat(Math.min(daySchedules.length, 3))}</span>`;
+        cell.title = daySchedules.map(s => `${s.time || ''} ${s.title}`).join('\n');
+      }
+
+      return cell;
+    }
+
+    // ============================================
+    // iCal エクスポート
+    // ============================================
+    function exportToICal() {
+      let ical = 'BEGIN:VCALENDAR\r\n';
+      ical += 'VERSION:2.0\r\n';
+      ical += 'PRODID:-//ゆるスケ//JP\r\n';
+      ical += 'CALSCALE:GREGORIAN\r\n';
+      ical += 'METHOD:PUBLISH\r\n';
+
+      schedules.forEach((s, idx) => {
+        const date = new Date(s.fullDate);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        ical += 'BEGIN:VEVENT\r\n';
+        ical += `UID:${idx}-${Date.now()}@yurusuke\r\n`;
+
+        if (s.time && s.time !== '未定') {
+          const hours = s.time.slice(0, 2);
+          const minutes = s.time.slice(2);
+          ical += `DTSTART:${year}${month}${day}T${hours}${minutes}00\r\n`;
+          ical += `DTEND:${year}${month}${day}T${hours}${minutes}00\r\n`;
+        } else {
+          ical += `DTSTART;VALUE=DATE:${year}${month}${day}\r\n`;
+          ical += `DTEND;VALUE=DATE:${year}${month}${day}\r\n`;
+        }
+
+        ical += `SUMMARY:${s.title}\r\n`;
+        if (s.isOther) {
+          ical += 'DESCRIPTION:他人の予定\r\n';
+        }
+        ical += 'END:VEVENT\r\n';
+      });
+
+      ical += 'END:VCALENDAR\r\n';
+
+      const blob = new Blob([ical], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'yurusuke.ics';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      addMessage('system', 'Googleカレンダー用のファイルをダウンロードしました。Googleカレンダーの設定からインポートしてください。');
+      closePopup('settingsPopup');
+    }
+
+    // ============================================
+    // 設定関連イベント
+    // ============================================
+    document.getElementById('calendarBtn').addEventListener('click', openCalendar);
+
+    document.getElementById('reminderToggle').addEventListener('change', async function() {
+      if (this.checked) {
+        if ('Notification' in window) {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            appSettings.reminderEnabled = true;
+            document.getElementById('reminderMinutesRow').style.display = 'flex';
+          } else {
+            this.checked = false;
+            alert('通知を有効にするには、ブラウザの通知許可が必要です。');
+            return;
+          }
+        } else {
+          this.checked = false;
+          alert('このブラウザは通知をサポートしていません。');
+          return;
+        }
+      } else {
+        appSettings.reminderEnabled = false;
+        document.getElementById('reminderMinutesRow').style.display = 'none';
+      }
+      localStorage.setItem('appSettings', JSON.stringify(appSettings));
+      startReminderCheck();
+    });
+
+    document.getElementById('reminderMinutesSelect').addEventListener('change', function() {
+      appSettings.reminderMinutes = parseInt(this.value);
+      localStorage.setItem('appSettings', JSON.stringify(appSettings));
+    });
+
+    document.getElementById('repeatEndMonthsSelect').addEventListener('change', function() {
+      appSettings.repeatEndMonths = parseInt(this.value);
+      localStorage.setItem('appSettings', JSON.stringify(appSettings));
+    });
+
+    document.getElementById('exportIcalBtn').addEventListener('click', exportToICal);
+
+    // 設定値の復元
+    function restoreSettings() {
+      document.getElementById('reminderToggle').checked = appSettings.reminderEnabled;
+      document.getElementById('reminderMinutesRow').style.display = appSettings.reminderEnabled ? 'flex' : 'none';
+      document.getElementById('reminderMinutesSelect').value = appSettings.reminderMinutes;
+      document.getElementById('repeatEndMonthsSelect').value = appSettings.repeatEndMonths;
+    }
+
+    // キーボードショートカット
+    document.addEventListener('keydown', function(e) {
+      // Ctrl+F で検索
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        openSearch();
+      }
+      // Ctrl+Z で Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        performUndo();
+      }
+      // Escape で検索閉じる
+      if (e.key === 'Escape') {
+        closeSearch();
+      }
+    });
+
+    // 検索入力イベント
+    document.getElementById('searchInput').addEventListener('input', function() {
+      performSearch(this.value);
+    });
+
+    document.getElementById('searchInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          searchPrev();
+        } else {
+          searchNext();
+        }
+      }
+    });
+
     initializeApp();
+    restoreSettings();
+    startReminderCheck();
 
     // Service Worker登録
     if ('serviceWorker' in navigator) {
