@@ -362,11 +362,19 @@
     }
     /* カレンダー */
     .calendar-popup {
-      width: 350px;
-      max-width: 95vw;
+      width: 95vw;
+      max-width: 600px;
+      height: 85vh;
+      max-height: 700px;
+      display: flex;
+      flex-direction: column;
     }
     .calendar-content {
       padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .calendar-nav {
       display: flex;
@@ -374,56 +382,87 @@
       align-items: center;
       margin-bottom: 12px;
       font-weight: 600;
+      font-size: 18px;
     }
     .cal-nav-btn {
       background: #4a90d9;
       color: white;
       border: none;
-      padding: 8px 14px;
+      padding: 10px 16px;
       border-radius: 6px;
       cursor: pointer;
+      font-size: 16px;
     }
     .calendar-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: auto repeat(6, 1fr);
       gap: 2px;
+      flex: 1;
+      overflow: hidden;
     }
     .calendar-grid .day-header {
       text-align: center;
       font-size: 12px;
       font-weight: 600;
-      padding: 6px;
+      padding: 8px 4px;
       color: #666;
+      background: #f8f9fa;
     }
     .calendar-grid .day-header:first-child { color: #dc3545; }
     .calendar-grid .day-header:last-child { color: #007bff; }
     .calendar-grid .day-cell {
-      text-align: center;
-      padding: 8px 4px;
-      font-size: 13px;
-      border-radius: 6px;
+      padding: 4px;
+      font-size: 12px;
+      border-radius: 4px;
       cursor: default;
-      min-height: 36px;
+      min-height: 60px;
+      border: 1px solid #eee;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .calendar-grid .day-cell .day-number {
+      font-weight: 600;
+      margin-bottom: 2px;
     }
     .calendar-grid .day-cell.other-month {
+      background: #fafafa;
+    }
+    .calendar-grid .day-cell.other-month .day-number {
       color: #ccc;
     }
-    .calendar-grid .day-cell.today {
+    .calendar-grid .day-cell.today .day-number {
       background: #4a90d9;
       color: white;
-      font-weight: 600;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .calendar-grid .day-cell.has-schedule {
-      background: #e3f2fd;
-      font-weight: 600;
-    }
-    .calendar-grid .day-cell.has-schedule.today {
+    .calendar-grid .day-cell.sunday .day-number { color: #dc3545; }
+    .calendar-grid .day-cell.saturday .day-number { color: #007bff; }
+    .calendar-grid .day-cell.today.sunday .day-number,
+    .calendar-grid .day-cell.today.saturday .day-number { color: white; }
+    .calendar-grid .day-cell .schedule-item {
+      font-size: 10px;
       background: #4a90d9;
+      color: white;
+      padding: 2px 4px;
+      border-radius: 3px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .calendar-grid .day-cell .schedule-dot {
-      display: block;
-      font-size: 8px;
-      line-height: 1;
+    .calendar-grid .day-cell .schedule-item.other {
+      background: #9e9e9e;
+    }
+    .calendar-grid .day-cell .schedule-more {
+      font-size: 10px;
+      color: #666;
       margin-top: 2px;
     }
     /* 検索オーバーレイ */
@@ -1127,6 +1166,52 @@
     }
 
     // ============================================
+    // 一括削除パーサー
+    // ============================================
+    function parseBulkDelete(input) {
+      // 末尾に削除キーワードがあり、複数行を含む場合
+      const deleteKeywords = /(を?削除|を?消して|を?消す)$/;
+      if (!deleteKeywords.test(input)) return null;
+
+      // 改行で分割して2行以上あるかチェック
+      const lines = input.replace(deleteKeywords, '').trim().split(/[\n\r]+/).filter(l => l.trim());
+      if (lines.length < 2) return null;
+
+      const matches = [];
+      const seen = new Set();
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // 日付パターンを検出: 1/26, 1/26 1000, 1/26  1000 タイトル
+        const lineMatch = trimmed.match(/^(\d{1,2}\/\d{1,2})\s+(\d{4})?\s*(.*)$/);
+        if (lineMatch) {
+          const date = lineMatch[1];
+          const time = lineMatch[2] || null;
+          const title = lineMatch[3]?.trim() || null;
+
+          // マッチする予定を検索
+          schedules.forEach(s => {
+            const dateMatch = s.date === date;
+            const timeMatch = !time || s.time === time;
+            const titleMatch = !title || s.title === title || s.title.includes(title);
+
+            if (dateMatch && timeMatch && titleMatch) {
+              const key = `${s.date}-${s.time}-${s.title}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                matches.push(s);
+              }
+            }
+          });
+        }
+      });
+
+      return { matches };
+    }
+
+    // ============================================
     // 変更・削除リクエストのパーサー
     // ============================================
     function parseModificationRequest(input) {
@@ -1608,6 +1693,10 @@
         schedules.push(...pendingAction.schedules);
       } else if (pendingAction.type === 'delete') {
         schedules = schedules.filter(s => s !== pendingAction.target);
+      } else if (pendingAction.type === 'delete-multiple') {
+        const targetsSet = new Set(pendingAction.targets);
+        schedules = schedules.filter(s => !targetsSet.has(s));
+        addMessage('system', `${pendingAction.targets.length}件の予定を削除しました。`);
       } else if (pendingAction.type === 'modify') {
         // 重複チェック（変更対象自身は除外）
         if (isDuplicate(pendingAction.newSchedule, pendingAction.target)) {
@@ -1868,6 +1957,13 @@
         return;
       }
 
+      // Undo パターンをチェック
+      const undoPatterns = ['取り消し', '取消し', '取消', '取り消', '元に戻す', '元に戻して', 'undo', 'アンドゥ'];
+      if (undoPatterns.includes(normalizedInput.toLowerCase())) {
+        performUndo();
+        return;
+      }
+
       // 繰り返し予定のチェック
       const repeatResult = parseRepeatSchedule(input);
       if (repeatResult) {
@@ -1880,6 +1976,20 @@
           setInputEnabled(false);
         } else {
           addMessage('system', '追加できる予定がありませんでした（全て重複）。');
+        }
+        return;
+      }
+
+      // 一括削除のチェック（複数行 + 削除キーワード）
+      const bulkDeleteResult = parseBulkDelete(input);
+      if (bulkDeleteResult) {
+        if (bulkDeleteResult.matches.length > 0) {
+          const confirmText = `${bulkDeleteResult.matches.length}件の予定を削除しますか？<br>${bulkDeleteResult.matches.map(s => `・${s.date} ${s.time || ''} ${s.title}`).join('<br>')}`;
+          addMessage('confirm', confirmText, 'confirm');
+          pendingAction = { type: 'delete-multiple', targets: bulkDeleteResult.matches };
+          setInputEnabled(false);
+        } else {
+          addMessage('system', '該当する予定が見つかりませんでした。');
         }
         return;
       }
@@ -2591,6 +2701,11 @@
       cell.className = 'day-cell';
       if (isOtherMonth) cell.classList.add('other-month');
 
+      // 曜日クラスを追加
+      const dayOfWeek = date.getDay();
+      if (dayOfWeek === 0) cell.classList.add('sunday');
+      if (dayOfWeek === 6) cell.classList.add('saturday');
+
       const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
       const today = new Date();
       const todayStr = `${today.getMonth() + 1}/${today.getDate()}`;
@@ -2599,15 +2714,37 @@
         cell.classList.add('today');
       }
 
-      const daySchedules = schedules.filter(s => s.date === dateStr);
-      if (daySchedules.length > 0) {
-        cell.classList.add('has-schedule');
-      }
+      const daySchedules = schedules
+        .filter(s => s.date === dateStr)
+        .sort((a, b) => {
+          if (!a.time) return 1;
+          if (!b.time) return -1;
+          return a.time.localeCompare(b.time);
+        });
 
-      cell.innerHTML = `<span>${date.getDate()}</span>`;
-      if (daySchedules.length > 0) {
-        cell.innerHTML += `<span class="schedule-dot">${'●'.repeat(Math.min(daySchedules.length, 3))}</span>`;
-        cell.title = daySchedules.map(s => `${s.time || ''} ${s.title}`).join('\n');
+      // 日付番号
+      const dayNumber = document.createElement('span');
+      dayNumber.className = 'day-number';
+      dayNumber.textContent = date.getDate();
+      cell.appendChild(dayNumber);
+
+      // 予定を表示（最大3件）
+      const maxShow = 3;
+      daySchedules.slice(0, maxShow).forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'schedule-item' + (s.isOther ? ' other' : '');
+        const timeStr = s.time ? s.time.slice(0, 2) + ':' + s.time.slice(2) + ' ' : '';
+        item.textContent = timeStr + s.title;
+        item.title = `${s.time || ''} ${s.title}`;
+        cell.appendChild(item);
+      });
+
+      // 残りの件数を表示
+      if (daySchedules.length > maxShow) {
+        const more = document.createElement('div');
+        more.className = 'schedule-more';
+        more.textContent = `+${daySchedules.length - maxShow}件`;
+        cell.appendChild(more);
       }
 
       return cell;
@@ -2730,6 +2867,22 @@
         closeSearch();
       }
     });
+
+    // 3本指タップでUndo（モバイル用）
+    let touchCount = 0;
+    let touchTimer = null;
+    document.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 3) {
+        touchCount++;
+        if (touchTimer) clearTimeout(touchTimer);
+        touchTimer = setTimeout(() => {
+          if (touchCount >= 1) {
+            performUndo();
+          }
+          touchCount = 0;
+        }, 300);
+      }
+    }, { passive: true });
 
     // 検索入力イベント
     document.getElementById('searchInput').addEventListener('input', function() {
