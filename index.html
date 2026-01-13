@@ -296,6 +296,82 @@
       text-align: center;
       padding: 8px;
     }
+    .detect-patterns-btn {
+      width: 100%;
+      padding: 10px;
+      background: #6c5ce7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .detect-patterns-btn:hover {
+      background: #5b4cdb;
+    }
+    .detected-patterns-list {
+      margin-top: 12px;
+      padding: 12px;
+      background: #fff3cd;
+      border-radius: 8px;
+      border: 1px solid #ffc107;
+    }
+    .detected-patterns-header {
+      font-weight: 600;
+      font-size: 14px;
+      color: #856404;
+      margin-bottom: 10px;
+    }
+    .detected-pattern-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      border: 1px solid #e0e0e0;
+    }
+    .detected-pattern-item:last-child {
+      margin-bottom: 0;
+    }
+    .detected-pattern-info {
+      flex: 1;
+    }
+    .detected-pattern-title {
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .detected-pattern-detail {
+      font-size: 12px;
+      color: #666;
+      margin-top: 2px;
+    }
+    .detected-pattern-register {
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .detected-pattern-register:hover {
+      background: #218838;
+    }
+    .detected-pattern-register.registered {
+      background: #6c757d;
+      cursor: default;
+    }
+    .no-detected-patterns {
+      color: #856404;
+      font-size: 14px;
+      text-align: center;
+    }
     .data-btn {
       width: 100%;
       padding: 12px;
@@ -794,6 +870,11 @@
             <div class="repeat-patterns-header">📅 登録中の定期予定</div>
             <div id="repeatPatternsList" class="repeat-patterns-list">
               <div class="no-patterns">定期予定はありません</div>
+            </div>
+            <button class="detect-patterns-btn" onclick="detectRepeatPatterns()">🔍 予定から定期パターンを検出</button>
+            <div id="detectedPatternsList" class="detected-patterns-list" style="display: none;">
+              <div class="detected-patterns-header">検出された定期パターン</div>
+              <div id="detectedPatternsContent"></div>
             </div>
           </div>
           <div class="settings-item disabled">
@@ -3463,6 +3544,141 @@
       }
 
       return input;
+    }
+
+    // 定期予定パターンの検出
+    let detectedPatterns = []; // 検出されたパターンを保持
+
+    function detectRepeatPatterns() {
+      const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+
+      // スケジュールを曜日・時間・タイトルでグループ化
+      const patternMap = new Map();
+
+      schedules.forEach(s => {
+        if (!s.fullDate) return;
+
+        const scheduleDate = new Date(s.fullDate);
+        const dayOfWeek = scheduleDate.getDay();
+        const time = s.time || '未定';
+        const title = s.title;
+
+        // キーを作成（曜日-時間-タイトル）
+        const key = `${dayOfWeek}-${time}-${title}`;
+
+        if (!patternMap.has(key)) {
+          patternMap.set(key, {
+            dayOfWeek,
+            time,
+            title,
+            count: 0,
+            dates: []
+          });
+        }
+
+        const pattern = patternMap.get(key);
+        pattern.count++;
+        pattern.dates.push(s.date);
+      });
+
+      // 2回以上出現するパターンを抽出
+      const candidates = [];
+      patternMap.forEach((pattern, key) => {
+        if (pattern.count >= 2) {
+          candidates.push(pattern);
+        }
+      });
+
+      // 既に登録済みのパターンを除外
+      const newPatterns = candidates.filter(candidate => {
+        return !repeatPatterns.some(rp =>
+          rp.dayOfWeek === candidate.dayOfWeek &&
+          rp.time === candidate.time &&
+          rp.title === candidate.title
+        );
+      });
+
+      // 出現回数の多い順にソート
+      newPatterns.sort((a, b) => b.count - a.count);
+
+      detectedPatterns = newPatterns;
+
+      // 結果を表示
+      const listEl = document.getElementById('detectedPatternsList');
+      const contentEl = document.getElementById('detectedPatternsContent');
+
+      if (newPatterns.length === 0) {
+        contentEl.innerHTML = '<div class="no-detected-patterns">新しい定期パターンは見つかりませんでした</div>';
+        listEl.style.display = 'block';
+        return;
+      }
+
+      contentEl.innerHTML = newPatterns.map((pattern, index) => {
+        const dayName = weekdays[pattern.dayOfWeek];
+        const timeStr = pattern.time === '未定' ? '時間未定' : pattern.time;
+        return `
+          <div class="detected-pattern-item" id="detected-${index}">
+            <div class="detected-pattern-info">
+              <div class="detected-pattern-title">${pattern.title}</div>
+              <div class="detected-pattern-detail">毎週${dayName}曜 ${timeStr}（${pattern.count}件検出）</div>
+            </div>
+            <button class="detected-pattern-register" onclick="registerDetectedPattern(${index})">登録</button>
+          </div>
+        `;
+      }).join('');
+
+      listEl.style.display = 'block';
+    }
+
+    // 検出されたパターンを登録
+    function registerDetectedPattern(index) {
+      const pattern = detectedPatterns[index];
+      if (!pattern) return;
+
+      // 既に登録済みかチェック
+      const alreadyRegistered = repeatPatterns.some(rp =>
+        rp.dayOfWeek === pattern.dayOfWeek &&
+        rp.time === pattern.time &&
+        rp.title === pattern.title
+      );
+
+      if (alreadyRegistered) {
+        return;
+      }
+
+      // パターンを登録
+      const newPattern = {
+        id: Date.now(),
+        dayOfWeek: pattern.dayOfWeek,
+        time: pattern.time === '未定' ? null : pattern.time,
+        title: pattern.title
+      };
+
+      repeatPatterns.push(newPattern);
+      localStorage.setItem('repeatPatterns', JSON.stringify(repeatPatterns));
+
+      // UIを更新
+      updateRepeatPatternsList();
+
+      // ボタンを「登録済み」に変更
+      const itemEl = document.getElementById(`detected-${index}`);
+      if (itemEl) {
+        const btn = itemEl.querySelector('.detected-pattern-register');
+        btn.textContent = '登録済み';
+        btn.classList.add('registered');
+        btn.onclick = null;
+      }
+
+      // 検出リストから削除して再描画
+      detectedPatterns[index] = null;
+
+      // 全て登録されたらメッセージを表示
+      const remaining = detectedPatterns.filter(p => p !== null);
+      if (remaining.length === 0) {
+        setTimeout(() => {
+          document.getElementById('detectedPatternsList').style.display = 'none';
+        }, 1500);
+      }
     }
 
     // 定期予定の自動補充（アプリ起動時に呼ばれる）
