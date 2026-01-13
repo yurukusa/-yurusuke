@@ -543,6 +543,23 @@
     .schedule-text .other-schedule {
       color: #999;
     }
+    .copy-schedule-btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 6px 12px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .copy-schedule-btn:hover {
+      background: #5a6268;
+    }
+    .copy-schedule-btn:active {
+      background: #495057;
+    }
     @supports (padding-bottom: env(safe-area-inset-bottom)) {
       .input-form {
         padding-bottom: calc(12px + env(safe-area-inset-bottom));
@@ -2104,7 +2121,65 @@
 
     function showScheduleList() {
       const text = formatScheduleList();
-      addMessage('system', `<div class="schedule-text">${text}</div>`);
+      const copyButton = schedules.length > 0 ? '<button class="copy-schedule-btn" onclick="copyScheduleToClipboard()">📋 コピー</button>' : '';
+      addMessage('system', `<div class="schedule-text">${text}</div>${copyButton}`);
+    }
+
+    // 外部コピー用のプレーンテキスト生成
+    function formatScheduleForCopy() {
+      if (schedules.length === 0) return '';
+
+      const sorted = [...schedules].sort((a, b) => {
+        const dateA = new Date(a.fullDate);
+        const dateB = new Date(b.fullDate);
+        if (dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+        return getSortableTime(a.time) > getSortableTime(b.time) ? 1 : -1;
+      });
+
+      const grouped = {};
+      sorted.forEach(s => {
+        if (!grouped[s.date]) grouped[s.date] = [];
+        grouped[s.date].push(s);
+      });
+
+      let lines = [];
+      Object.keys(grouped).forEach(date => {
+        // 日付を固定幅にパディング（例: "1/20" → "1/20  "で6文字）
+        const paddedDate = date.padEnd(6, ' ');
+        grouped[date].forEach((s, idx) => {
+          const timeStr = s.time && s.time !== '未定' ? `${s.time} ` : '';
+          let line;
+          if (s.isOther) {
+            const content = `(${timeStr}${s.title})`;
+            line = idx === 0 ? `${paddedDate}${content}` : `      ${content}`;
+          } else {
+            const content = `${timeStr}${s.title}`;
+            line = idx === 0 ? `${paddedDate}${content}` : `      ${content}`;
+          }
+          lines.push(line);
+        });
+      });
+
+      return lines.join('\n');
+    }
+
+    // クリップボードにコピー
+    function copyScheduleToClipboard() {
+      const text = formatScheduleForCopy();
+      if (!text) return;
+
+      navigator.clipboard.writeText(text).then(() => {
+        addMessage('system', '📋 予定をコピーしました');
+      }).catch(err => {
+        // フォールバック（古いブラウザ用）
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        addMessage('system', '📋 予定をコピーしました');
+      });
     }
 
     function setInputEnabled(enabled) {
