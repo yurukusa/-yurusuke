@@ -3396,7 +3396,16 @@
 
       listEl.innerHTML = repeatPatterns.map(pattern => {
         const dayName = weekdays[pattern.dayOfWeek];
-        const timeStr = pattern.time || '終日';
+        // 4桁数字（1030）を見やすい形式（10:30）で表示
+        let timeStr = '終日';
+        if (pattern.time) {
+          const t = pattern.time.replace(':', ''); // コロンがあれば除去
+          if (t.length === 4) {
+            timeStr = t.slice(0, 2) + ':' + t.slice(2);
+          } else {
+            timeStr = pattern.time;
+          }
+        }
         return `
           <div class="repeat-pattern-item" data-id="${pattern.id}">
             <div class="repeat-pattern-info">
@@ -3433,7 +3442,12 @@
       document.getElementById('editPatternId').value = patternId;
       document.getElementById('editPatternTitle').value = pattern.title;
       document.getElementById('editPatternDay').value = pattern.dayOfWeek;
-      document.getElementById('editPatternTime').value = pattern.time || '';
+      // 時間を見やすい形式（10:30）で表示
+      let timeDisplay = pattern.time || '';
+      if (timeDisplay && timeDisplay.length === 4 && !timeDisplay.includes(':')) {
+        timeDisplay = timeDisplay.slice(0, 2) + ':' + timeDisplay.slice(2);
+      }
+      document.getElementById('editPatternTime').value = timeDisplay;
 
       // 適用開始日はデフォルトで今日
       const today = new Date();
@@ -3514,20 +3528,20 @@
       alert(`定期予定を更新しました。\\n${modifiedCount}件の予定を変更しました。`);
     }
 
-    // 時間入力をパース（10:30, 1030, 10時半 などに対応）
+    // 時間入力を4桁数字形式（1030等）に変換
     function parseTimeInput(input) {
       if (!input) return null;
 
       // 10:30 形式
       let match = input.match(/^(\d{1,2}):(\d{2})$/);
       if (match) {
-        return `${match[1].padStart(2, '0')}:${match[2]}`;
+        return `${match[1].padStart(2, '0')}${match[2]}`;
       }
 
-      // 1030 形式
+      // 1030 形式（既に4桁数字）
       match = input.match(/^(\d{1,2})(\d{2})$/);
       if (match) {
-        return `${match[1].padStart(2, '0')}:${match[2]}`;
+        return `${match[1].padStart(2, '0')}${match[2]}`;
       }
 
       // 10時30分 or 10時半 形式
@@ -3540,7 +3554,7 @@
         } else if (match[3]) {
           min = match[3].padStart(2, '0');
         }
-        return `${hour}:${min}`;
+        return `${hour}${min}`;
       }
 
       return input;
@@ -3615,7 +3629,16 @@
 
       contentEl.innerHTML = newPatterns.map((pattern, index) => {
         const dayName = weekdays[pattern.dayOfWeek];
-        const timeStr = pattern.time === '未定' ? '時間未定' : pattern.time;
+        // 時間を見やすい形式（10:30）で表示
+        let timeStr = '時間未定';
+        if (pattern.time && pattern.time !== '未定') {
+          const t = pattern.time.replace(':', '');
+          if (t.length === 4) {
+            timeStr = t.slice(0, 2) + ':' + t.slice(2);
+          } else {
+            timeStr = pattern.time;
+          }
+        }
         return `
           <div class="detected-pattern-item" id="detected-${index}">
             <div class="detected-pattern-info">
