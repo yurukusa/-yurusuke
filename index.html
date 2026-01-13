@@ -3525,7 +3525,33 @@
       updateRepeatPatternsList();
       closeEditPatternModal();
 
-      alert(`定期予定を更新しました。\\n${modifiedCount}件の予定を変更しました。`);
+      // 設定画面を閉じる
+      document.getElementById('settingsScreen').classList.remove('show');
+
+      // 変更内容をチャットに表示
+      const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+      const oldDayName = weekdays[oldDayOfWeek];
+      const newDayName = weekdays[newDayOfWeek];
+      const oldTimeDisplay = oldTime ? (oldTime.length === 4 ? oldTime.slice(0, 2) + ':' + oldTime.slice(2) : oldTime) : '終日';
+      const newTimeDisplay = newTime ? (newTime.length === 4 ? newTime.slice(0, 2) + ':' + newTime.slice(2) : newTime) : '終日';
+
+      let changeDetails = [];
+      if (oldTitle !== newTitle) {
+        changeDetails.push(`タイトル: ${oldTitle} → ${newTitle}`);
+      }
+      if (oldDayOfWeek !== newDayOfWeek) {
+        changeDetails.push(`曜日: ${oldDayName}曜 → ${newDayName}曜`);
+      }
+      if (oldTime !== newTime) {
+        changeDetails.push(`時間: ${oldTimeDisplay} → ${newTimeDisplay}`);
+      }
+
+      const changeText = changeDetails.length > 0 ? changeDetails.join('、') : '変更なし';
+      const message = `📝 定期予定を更新しました\n${changeText}\n（${modifiedCount}件の予定を変更）`;
+      addMessage('system', message);
+
+      // 予定一覧を更新表示
+      showScheduleList();
     }
 
     // 時間入力を4桁数字形式（1030等）に変換
