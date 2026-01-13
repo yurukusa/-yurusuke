@@ -142,6 +142,63 @@
       border-radius: 4px;
       font-size: 12px;
     }
+    .repeat-patterns-section {
+      margin: 16px 0;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    .repeat-patterns-header {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .repeat-patterns-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .repeat-pattern-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .repeat-pattern-item:last-child {
+      margin-bottom: 0;
+    }
+    .repeat-pattern-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .repeat-pattern-title {
+      font-weight: 500;
+    }
+    .repeat-pattern-time {
+      font-size: 12px;
+      color: #666;
+    }
+    .repeat-pattern-delete {
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .repeat-pattern-delete:hover {
+      background: #c82333;
+    }
+    .no-patterns {
+      color: #999;
+      font-size: 14px;
+      text-align: center;
+      padding: 8px;
+    }
     .data-btn {
       width: 100%;
       padding: 12px;
@@ -636,6 +693,12 @@
               <option value="6">半年先まで</option>
             </select>
           </div>
+          <div class="repeat-patterns-section">
+            <div class="repeat-patterns-header">📅 登録中の定期予定</div>
+            <div id="repeatPatternsList" class="repeat-patterns-list">
+              <div class="no-patterns">定期予定はありません</div>
+            </div>
+          </div>
           <div class="settings-item disabled">
             <span>アカウント連携</span>
             <span class="badge">準備中</span>
@@ -700,6 +763,7 @@
   <script>
     // 状態管理
     let schedules = JSON.parse(localStorage.getItem('schedules') || '[]');
+    let repeatPatterns = JSON.parse(localStorage.getItem('repeatPatterns') || '[]'); // 定期予定パターン
     let pendingAction = null; // { type: 'add'|'modify'|'delete', ... }
     let undoStack = []; // Undo用のスタック
     const MAX_UNDO = 20;
@@ -1836,6 +1900,12 @@
         schedules.push(pendingAction.schedule);
       } else if (pendingAction.type === 'add-multiple') {
         schedules.push(...pendingAction.schedules);
+      } else if (pendingAction.type === 'add-repeat') {
+        // 繰り返し予定を追加し、パターンも保存
+        schedules.push(...pendingAction.schedules);
+        repeatPatterns.push(pendingAction.pattern);
+        localStorage.setItem('repeatPatterns', JSON.stringify(repeatPatterns));
+        updateRepeatPatternsList();
       } else if (pendingAction.type === 'delete') {
         schedules = schedules.filter(s => s !== pendingAction.target);
       } else if (pendingAction.type === 'delete-multiple') {
@@ -2117,7 +2187,14 @@
           const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
           const confirmText = `毎週${weekdays[repeatResult.targetDay]}曜「${repeatResult.title}」を${newSchedules.length}件追加しますか？`;
           addMessage('confirm', confirmText, 'confirm');
-          pendingAction = { type: 'add-multiple', schedules: newSchedules };
+          // パターン情報も一緒に保存
+          const repeatPattern = {
+            id: Date.now(),
+            dayOfWeek: repeatResult.targetDay,
+            time: repeatResult.time,
+            title: repeatResult.title
+          };
+          pendingAction = { type: 'add-repeat', schedules: newSchedules, pattern: repeatPattern };
           setInputEnabled(false);
         } else {
           addMessage('system', '追加できる予定がありませんでした（全て重複）。');
@@ -3081,6 +3158,93 @@
       document.getElementById('reminderMinutesRow').style.display = appSettings.reminderEnabled ? 'flex' : 'none';
       document.getElementById('reminderMinutesSelect').value = appSettings.reminderMinutes;
       document.getElementById('repeatEndMonthsSelect').value = appSettings.repeatEndMonths;
+      updateRepeatPatternsList();
+    }
+
+    // 定期予定リストの更新
+    function updateRepeatPatternsList() {
+      const listEl = document.getElementById('repeatPatternsList');
+      const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+
+      if (repeatPatterns.length === 0) {
+        listEl.innerHTML = '<div class="no-patterns">定期予定はありません</div>';
+        return;
+      }
+
+      listEl.innerHTML = repeatPatterns.map(pattern => {
+        const dayName = weekdays[pattern.dayOfWeek];
+        const timeStr = pattern.time || '終日';
+        return `
+          <div class="repeat-pattern-item" data-id="${pattern.id}">
+            <div class="repeat-pattern-info">
+              <span class="repeat-pattern-title">${pattern.title}</span>
+              <span class="repeat-pattern-time">毎週${dayName}曜 ${timeStr}</span>
+            </div>
+            <button class="repeat-pattern-delete" onclick="deleteRepeatPattern(${pattern.id})">削除</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 定期予定の削除
+    function deleteRepeatPattern(patternId) {
+      if (!confirm('この定期予定を削除しますか？\\n（既に追加された予定は残ります）')) return;
+
+      repeatPatterns = repeatPatterns.filter(p => p.id !== patternId);
+      localStorage.setItem('repeatPatterns', JSON.stringify(repeatPatterns));
+      updateRepeatPatternsList();
+    }
+
+    // 定期予定の自動補充（アプリ起動時に呼ばれる）
+    function replenishRepeatSchedules() {
+      if (repeatPatterns.length === 0) return;
+
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endDate = new Date(today.getFullYear(), today.getMonth() + appSettings.repeatEndMonths + 1, 0);
+
+      let addedCount = 0;
+
+      repeatPatterns.forEach(pattern => {
+        let current = new Date(today);
+
+        // 最初の該当曜日を見つける
+        let daysToAdd = pattern.dayOfWeek - current.getDay();
+        if (daysToAdd < 0) daysToAdd += 7;
+        current.setDate(current.getDate() + daysToAdd);
+
+        while (current <= endDate) {
+          const dateStr = `${current.getMonth() + 1}/${current.getDate()}`;
+          const schedule = {
+            date: dateStr,
+            time: pattern.time,
+            title: pattern.title,
+            fullDate: current.toISOString(),
+            isOther: false,
+            isRepeat: true
+          };
+
+          // 重複チェック（同じ日付・時間・タイトルの予定がなければ追加）
+          const exists = schedules.some(s =>
+            s.date === schedule.date &&
+            s.time === schedule.time &&
+            s.title === schedule.title
+          );
+
+          if (!exists) {
+            schedules.push(schedule);
+            addedCount++;
+          }
+
+          // 次の週へ
+          current.setDate(current.getDate() + 7);
+        }
+      });
+
+      if (addedCount > 0) {
+        localStorage.setItem('schedules', JSON.stringify(schedules));
+        console.log(`定期予定を${addedCount}件補充しました`);
+      }
     }
 
     // キーボードショートカット
@@ -3134,6 +3298,7 @@
     });
 
     initializeApp();
+    replenishRepeatSchedules(); // 定期予定の自動補充
     restoreSettings();
     startReminderCheck();
 
