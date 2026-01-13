@@ -1132,6 +1132,16 @@
         title = title.replace(timeResult.consumed, '').trim();
       }
 
+      // 「未定」を時間として認識し、タイトルから除去
+      let isTimeUndefined = false;
+      if (!timeResult) {
+        const undefinedTimeMatch = title.match(/^(未定|時間未定)\s*/);
+        if (undefinedTimeMatch) {
+          isTimeUndefined = true;
+          title = title.replace(undefinedTimeMatch[0], '').trim();
+        }
+      }
+
       // 末尾のアクション動詞を除去（「を入れて」「を追加」「を登録」など）
       title = title.replace(/を?(入れ(て|る)?|追加(して|する)?|登録(して|する)?|予定(して|する)?|設定(して|する)?)$/, '').trim();
 
@@ -1252,6 +1262,22 @@
         }
       }
 
+      // 「未定」パターンを検出（カッコ内は除外）
+      const undefinedTimeRegex = /\s(未定|時間未定)(?=\s|$)/g;
+      while ((match = undefinedTimeRegex.exec(workInput)) !== null) {
+        const undefinedIndex = match.index + 1;
+        if (isInsideParen(undefinedIndex)) continue;
+
+        // 日付の直後ではない「未定」のみ
+        const isAfterDate = dateMatches.some(dm => {
+          const dmEnd = dm.index + dm[0].length;
+          return undefinedIndex > dmEnd && undefinedIndex <= dmEnd + 2;
+        });
+        if (!isAfterDate) {
+          allMatches.push({ index: undefinedIndex, type: 'undefined-time', match: match[1] });
+        }
+      }
+
       // ソートして重複を除去
       allMatches.sort((a, b) => a.index - b.index);
 
@@ -1363,6 +1389,25 @@
             } else {
               skipped.push(`${lastDate} ${formatTime(timeResult.time)} ${title || '(空)'}`);
             }
+          }
+        }
+
+        // 未定時間（日付を引き継ぐ）
+        if (matchType === 'undefined-time' && lastDate) {
+          // 「未定」または「時間未定」を除去してタイトルを取得
+          let title = segment.replace(/^(未定|時間未定)\s*/, '').trim();
+          title = title.replace(/^[、,のにはへと]\s*/, '').replace(/\s*[、,のにはへと]$/, '').trim();
+
+          if (!isInvalidTitle(title)) {
+            parsed.push({
+              date: lastDate,
+              time: '未定',
+              title: title,
+              fullDate: lastFullDate,
+              isOther: false
+            });
+          } else {
+            skipped.push(`${lastDate} 未定 ${title || '(空)'}`);
           }
         }
       }
