@@ -181,6 +181,22 @@
       font-size: 12px;
       color: #666;
     }
+    .repeat-pattern-buttons {
+      display: flex;
+      gap: 6px;
+    }
+    .repeat-pattern-edit {
+      background: #17a2b8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .repeat-pattern-edit:hover {
+      background: #138496;
+    }
     .repeat-pattern-delete {
       background: #dc3545;
       color: white;
@@ -192,6 +208,87 @@
     }
     .repeat-pattern-delete:hover {
       background: #c82333;
+    }
+    .edit-pattern-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    .edit-pattern-modal.show {
+      display: flex;
+    }
+    .edit-pattern-content {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .edit-pattern-content h3 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+    }
+    .edit-pattern-field {
+      margin-bottom: 16px;
+    }
+    .edit-pattern-field label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #333;
+    }
+    .edit-pattern-field input,
+    .edit-pattern-field select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    .edit-pattern-field small {
+      display: block;
+      margin-top: 4px;
+      color: #666;
+      font-size: 12px;
+    }
+    .edit-pattern-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .edit-pattern-actions button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .edit-pattern-save {
+      background: #28a745;
+      color: white;
+    }
+    .edit-pattern-save:hover {
+      background: #218838;
+    }
+    .edit-pattern-cancel {
+      background: #6c757d;
+      color: white;
+    }
+    .edit-pattern-cancel:hover {
+      background: #5a6268;
     }
     .no-patterns {
       color: #999;
@@ -3180,7 +3277,10 @@
               <span class="repeat-pattern-title">${pattern.title}</span>
               <span class="repeat-pattern-time">毎週${dayName}曜 ${timeStr}</span>
             </div>
-            <button class="repeat-pattern-delete" onclick="deleteRepeatPattern(${pattern.id})">削除</button>
+            <div class="repeat-pattern-buttons">
+              <button class="repeat-pattern-edit" onclick="openEditPatternModal(${pattern.id})">編集</button>
+              <button class="repeat-pattern-delete" onclick="deleteRepeatPattern(${pattern.id})">削除</button>
+            </div>
           </div>
         `;
       }).join('');
@@ -3193,6 +3293,131 @@
       repeatPatterns = repeatPatterns.filter(p => p.id !== patternId);
       localStorage.setItem('repeatPatterns', JSON.stringify(repeatPatterns));
       updateRepeatPatternsList();
+    }
+
+    // 定期予定の編集モーダルを開く
+    let editingPatternId = null;
+    function openEditPatternModal(patternId) {
+      const pattern = repeatPatterns.find(p => p.id === patternId);
+      if (!pattern) return;
+
+      editingPatternId = patternId;
+
+      // フォームに現在の値をセット
+      document.getElementById('editPatternId').value = patternId;
+      document.getElementById('editPatternTitle').value = pattern.title;
+      document.getElementById('editPatternDay').value = pattern.dayOfWeek;
+      document.getElementById('editPatternTime').value = pattern.time || '';
+
+      // 適用開始日はデフォルトで今日
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      document.getElementById('editPatternFromDate').value = todayStr;
+
+      // モーダルを表示
+      document.getElementById('editPatternModal').classList.add('show');
+    }
+
+    // 定期予定の編集モーダルを閉じる
+    function closeEditPatternModal() {
+      document.getElementById('editPatternModal').classList.remove('show');
+      editingPatternId = null;
+    }
+
+    // 定期予定の編集を保存
+    function savePatternEdit() {
+      const patternId = editingPatternId;
+      const pattern = repeatPatterns.find(p => p.id === patternId);
+      if (!pattern) return;
+
+      const newTitle = document.getElementById('editPatternTitle').value.trim();
+      const newDayOfWeek = parseInt(document.getElementById('editPatternDay').value);
+      const newTimeInput = document.getElementById('editPatternTime').value.trim();
+      const fromDateStr = document.getElementById('editPatternFromDate').value;
+
+      if (!newTitle) {
+        alert('タイトルを入力してください');
+        return;
+      }
+
+      // 時間をパース
+      const newTime = parseTimeInput(newTimeInput);
+
+      // 変更前の値を保存
+      const oldTitle = pattern.title;
+      const oldDayOfWeek = pattern.dayOfWeek;
+      const oldTime = pattern.time;
+
+      // パターンを更新
+      pattern.title = newTitle;
+      pattern.dayOfWeek = newDayOfWeek;
+      pattern.time = newTime;
+      localStorage.setItem('repeatPatterns', JSON.stringify(repeatPatterns));
+
+      // 既存の予定を一括修正
+      const fromDate = fromDateStr ? new Date(fromDateStr) : new Date();
+      fromDate.setHours(0, 0, 0, 0);
+
+      let modifiedCount = 0;
+      schedules.forEach(s => {
+        // この定期予定から生成された予定かチェック
+        if (s.title === oldTitle && s.time === oldTime && s.isRepeat) {
+          const scheduleDate = new Date(s.fullDate);
+          const scheduleDayOfWeek = scheduleDate.getDay();
+
+          // 旧曜日に一致し、適用開始日以降の予定を修正
+          if (scheduleDayOfWeek === oldDayOfWeek && scheduleDate >= fromDate) {
+            // 新しい曜日との差分を計算
+            let dayDiff = newDayOfWeek - oldDayOfWeek;
+            const newScheduleDate = new Date(scheduleDate);
+            newScheduleDate.setDate(newScheduleDate.getDate() + dayDiff);
+
+            s.title = newTitle;
+            s.time = newTime;
+            s.date = `${newScheduleDate.getMonth() + 1}/${newScheduleDate.getDate()}`;
+            s.fullDate = newScheduleDate.toISOString();
+            modifiedCount++;
+          }
+        }
+      });
+
+      localStorage.setItem('schedules', JSON.stringify(schedules));
+      updateRepeatPatternsList();
+      closeEditPatternModal();
+
+      alert(`定期予定を更新しました。\\n${modifiedCount}件の予定を変更しました。`);
+    }
+
+    // 時間入力をパース（10:30, 1030, 10時半 などに対応）
+    function parseTimeInput(input) {
+      if (!input) return null;
+
+      // 10:30 形式
+      let match = input.match(/^(\d{1,2}):(\d{2})$/);
+      if (match) {
+        return `${match[1].padStart(2, '0')}:${match[2]}`;
+      }
+
+      // 1030 形式
+      match = input.match(/^(\d{1,2})(\d{2})$/);
+      if (match) {
+        return `${match[1].padStart(2, '0')}:${match[2]}`;
+      }
+
+      // 10時30分 or 10時半 形式
+      match = input.match(/(\d{1,2})時(半|(\d{1,2})分?)?/);
+      if (match) {
+        const hour = match[1].padStart(2, '0');
+        let min = '00';
+        if (match[2] === '半') {
+          min = '30';
+        } else if (match[3]) {
+          min = match[3].padStart(2, '0');
+        }
+        return `${hour}:${min}`;
+      }
+
+      return input;
     }
 
     // 定期予定の自動補充（アプリ起動時に呼ばれる）
@@ -3308,5 +3533,42 @@
         .catch(err => console.error('SW registration failed:', err));
     }
   </script>
+
+  <!-- 定期予定編集モーダル -->
+  <div id="editPatternModal" class="edit-pattern-modal">
+    <div class="edit-pattern-content">
+      <h3>定期予定の編集</h3>
+      <input type="hidden" id="editPatternId">
+      <div class="edit-pattern-field">
+        <label>タイトル</label>
+        <input type="text" id="editPatternTitle" placeholder="予定のタイトル">
+      </div>
+      <div class="edit-pattern-field">
+        <label>曜日</label>
+        <select id="editPatternDay">
+          <option value="0">日曜日</option>
+          <option value="1">月曜日</option>
+          <option value="2">火曜日</option>
+          <option value="3">水曜日</option>
+          <option value="4">木曜日</option>
+          <option value="5">金曜日</option>
+          <option value="6">土曜日</option>
+        </select>
+      </div>
+      <div class="edit-pattern-field">
+        <label>時間</label>
+        <input type="text" id="editPatternTime" placeholder="例: 10:30, 1030, 10時半">
+      </div>
+      <div class="edit-pattern-field">
+        <label>変更を適用する日</label>
+        <input type="date" id="editPatternFromDate">
+        <small>この日以降の予定が一括変更されます</small>
+      </div>
+      <div class="edit-pattern-actions">
+        <button class="edit-pattern-cancel" onclick="closeEditPatternModal()">キャンセル</button>
+        <button class="edit-pattern-save" onclick="savePatternEdit()">保存</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
