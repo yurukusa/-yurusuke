@@ -2144,17 +2144,17 @@
 
       let lines = [];
       Object.keys(grouped).forEach(date => {
-        // 日付を固定幅にパディング（例: "1/20" → "1/20  "で6文字）
-        const paddedDate = date.padEnd(6, ' ');
         grouped[date].forEach((s, idx) => {
           const timeStr = s.time && s.time !== '未定' ? `${s.time} ` : '';
           let line;
           if (s.isOther) {
             const content = `(${timeStr}${s.title})`;
-            line = idx === 0 ? `${paddedDate}${content}` : `      ${content}`;
+            // 1行目：日付 + スペース1個、2行目以降：スペース6個
+            line = idx === 0 ? `${date} ${content}` : `      ${content}`;
           } else {
             const content = `${timeStr}${s.title}`;
-            line = idx === 0 ? `${paddedDate}${content}` : `      ${content}`;
+            // 1行目：日付 + スペース1個、2行目以降：スペース6個
+            line = idx === 0 ? `${date} ${content}` : `      ${content}`;
           }
           lines.push(line);
         });
